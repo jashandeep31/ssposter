@@ -1,27 +1,13 @@
-import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import {
-  BriefcaseBusiness,
-  Clock3,
-  FileText,
-  Home,
-  Upload,
-} from "lucide-react";
+import { BriefcaseBusiness } from "lucide-react";
 import { and, desc, eq, ilike } from "drizzle-orm";
 
+import { DashboardNavbar } from "@/components/dashboard-navbar";
 import { MediaLibrary } from "@/components/media-library";
-import { SignOutButton } from "@/components/sign-out-button";
 import { db, schema } from "@/db";
 import { auth } from "@/lib/auth";
 import { getMaxUploadBytes, getMediaFileName } from "@/lib/r2";
-
-const navItems = [
-  { label: "Overview", href: "/dashboard", icon: Home },
-  { label: "Compose", href: "/dashboard#compose", icon: FileText },
-  { label: "Media", href: "/dashboard/media", icon: Upload },
-  { label: "Queue", href: "/dashboard#queue", icon: Clock3 },
-];
 
 type MediaPageProps = {
   searchParams: Promise<{
@@ -68,39 +54,7 @@ export default async function MediaPage({ searchParams }: MediaPageProps) {
 
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-950">
-      <header className="border-b border-emerald-100 bg-white">
-        <div className="mx-auto flex min-h-16 w-full max-w-6xl flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-3">
-            <Link
-              href="/"
-              className="flex min-w-0 items-center gap-2"
-              aria-label="ssposter home"
-            >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-sm font-semibold text-white">
-                ss
-              </span>
-              <span className="truncate text-lg font-semibold">ssposter</span>
-            </Link>
-            <SignOutButton />
-          </div>
-
-          <nav
-            className="flex gap-1 overflow-x-auto text-sm font-medium text-zinc-600"
-            aria-label="Dashboard navigation"
-          >
-            {navItems.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 transition-colors hover:bg-emerald-50 hover:text-emerald-800"
-              >
-                <item.icon className="size-4" aria-hidden="true" />
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </header>
+      <DashboardNavbar />
 
       <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[280px_1fr] lg:px-8">
         <aside className="space-y-4">

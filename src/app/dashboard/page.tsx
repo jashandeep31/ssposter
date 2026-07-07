@@ -4,9 +4,6 @@ import { redirect } from "next/navigation";
 import {
   BriefcaseBusiness,
   CalendarClock,
-  Clock3,
-  FileText,
-  Home,
   Send,
   Upload,
 } from "lucide-react";
@@ -18,16 +15,8 @@ import { auth } from "@/lib/auth";
 import { getMediaFileName } from "@/lib/r2";
 
 const navItems = [
-  { label: "Overview", href: "/dashboard", icon: Home },
-  { label: "Compose", href: "#compose", icon: FileText },
-  { label: "Media", href: "/dashboard/media", icon: Upload },
-  { label: "Queue", href: "#queue", icon: Clock3 },
-];
-
-const draftTips = [
-  "Hook in the first line",
-  "Keep one clear idea",
-  "Add a call to action",
+  { label: "Dashboard", href: "/dashboard" },
+  { label: "Media", href: "/dashboard/media" },
 ];
 
 function formatPublishTime(value: Date | null) {
@@ -97,12 +86,17 @@ export default async function DashboardPage() {
       minute: "2-digit",
     }).format(item.createdAt),
   }));
+  const mediaOptions = media.map((item) => ({
+    id: item.id,
+    displayName: item.displayName,
+    fileName: getMediaFileName(item.mediaUrl),
+  }));
 
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-950">
       <header className="border-b border-emerald-100 bg-white">
-        <div className="mx-auto flex min-h-16 w-full max-w-6xl flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-3">
+        <div className="mx-auto flex min-h-16 w-full max-w-6xl flex-col items-stretch gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-1 sm:flex-row sm:items-center sm:gap-5">
             <Link
               href="/"
               className="flex min-w-0 items-center gap-2"
@@ -113,28 +107,28 @@ export default async function DashboardPage() {
               </span>
               <span className="truncate text-lg font-semibold">ssposter</span>
             </Link>
-            <SignOutButton />
+
+            <nav
+              className="flex min-w-0 items-center gap-1 overflow-x-auto text-sm font-medium sm:shrink-0"
+              aria-label="Dashboard navigation"
+            >
+              {navItems.map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className="inline-flex h-9 items-center rounded-lg px-3 text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
           </div>
 
-          <nav
-            className="flex gap-1 overflow-x-auto text-sm font-medium text-zinc-600"
-            aria-label="Dashboard navigation"
-          >
-            {navItems.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 transition-colors hover:bg-emerald-50 hover:text-emerald-800"
-              >
-                <item.icon className="size-4" aria-hidden="true" />
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <SignOutButton />
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[280px_1fr] lg:px-8">
+        <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:px-8">
         <aside className="space-y-4">
           <section className="rounded-lg border border-emerald-100 bg-white p-4 shadow-sm shadow-emerald-950/5">
             <div className="flex items-center gap-3">
@@ -160,20 +154,9 @@ export default async function DashboardPage() {
             </dl>
           </section>
 
-          <section className="rounded-lg border border-emerald-100 bg-white p-4 shadow-sm shadow-emerald-950/5">
-            <h2 className="text-sm font-semibold">Draft checklist</h2>
-            <ul className="mt-3 space-y-2 text-sm text-zinc-600">
-              {draftTips.map((tip) => (
-                <li key={tip} className="flex gap-2">
-                  <span className="mt-2 size-1.5 shrink-0 rounded-full bg-emerald-500" />
-                  {tip}
-                </li>
-              ))}
-            </ul>
-          </section>
         </aside>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <section id="compose" className="rounded-lg border border-emerald-100 bg-white p-4 shadow-sm shadow-emerald-950/5 sm:p-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -245,6 +228,54 @@ export default async function DashboardPage() {
                 </div>
               </fieldset>
 
+              <fieldset>
+                <legend className="text-sm font-medium text-zinc-800">
+                  Media
+                </legend>
+                {mediaOptions.length > 0 ? (
+                  <div className="mt-2 grid gap-2 md:grid-cols-2">
+                    {mediaOptions.map((item) => (
+                      <label
+                        key={item.id}
+                        className="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border border-emerald-100 bg-zinc-50 px-3 py-3 text-sm text-zinc-800"
+                      >
+                        <input
+                          type="checkbox"
+                          name="mediaIds"
+                          value={item.id}
+                          className="mt-0.5 size-4 shrink-0 accent-emerald-600"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">
+                            {item.displayName}
+                          </span>
+                          <span className="mt-1 block truncate text-xs text-zinc-500">
+                            {item.fileName}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 rounded-lg bg-zinc-50 px-4 py-5 text-sm text-zinc-600">
+                    Upload media from the{" "}
+                    <Link
+                      href="/dashboard/media"
+                      className="font-medium text-emerald-700 hover:text-emerald-800"
+                    >
+                      media library
+                    </Link>{" "}
+                    before attaching it to a post.
+                  </p>
+                )}
+                {mediaOptions.length > 0 ? (
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Select any number of uploaded media files to attach to this
+                    post.
+                  </p>
+                ) : null}
+              </fieldset>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label
@@ -281,7 +312,7 @@ export default async function DashboardPage() {
                   type="submit"
                   name="intent"
                   value="draft"
-                  className="inline-flex h-10 items-center justify-center rounded-lg border border-emerald-200 bg-white px-4 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/20"
+                  className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-emerald-200 bg-white px-4 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/20 sm:w-auto"
                 >
                   Save draft
                 </button>
@@ -289,7 +320,7 @@ export default async function DashboardPage() {
                   type="submit"
                   name="intent"
                   value="schedule"
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/30"
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/30 sm:w-auto"
                 >
                   <CalendarClock className="size-4" aria-hidden="true" />
                   Schedule post

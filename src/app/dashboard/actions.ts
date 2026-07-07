@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db, schema } from "@/db";
 import { auth } from "@/lib/auth";
@@ -49,6 +49,15 @@ export async function createPost(formData: FormData) {
     .filter((platform) => platform === "x" || platform === "linkedin");
   const publishDate = String(formData.get("publishDate") ?? "");
   const publishTime = String(formData.get("publishTime") ?? "");
+  const mediaIds = Array.from(
+    new Set(
+      formData
+        .getAll("mediaIds")
+        .map(String)
+        .map((mediaId) => mediaId.trim())
+        .filter(Boolean),
+    ),
+  );
   const intent = String(formData.get("intent") ?? "schedule");
   const publishAt =
     intent === "schedule" && publishDate && publishTime
@@ -61,13 +70,35 @@ export async function createPost(formData: FormData) {
     return;
   }
 
-  await db.insert(schema.post).values({
-    id: crypto.randomUUID(),
-    userId: session.user.id,
-    content,
-    platforms: platforms.join(","),
-    publishAt: validPublishAt,
-    status: validPublishAt ? "scheduled" : "draft",
+  const selectedMedia = mediaIds.length
+    ? await db.query.userMedia.findMany({
+        where: (userMedia) =>
+          and(
+            inArray(userMedia.id, mediaIds),
+            eq(userMedia.userId, session.user.id),
+          ),
+      })
+    : [];
+  const postId = crypto.randomUUID();
+
+  await db.transaction(async (tx) => {
+    await tx.insert(schema.post).values({
+      id: postId,
+      userId: session.user.id,
+      content,
+      platforms: platforms.join(","),
+      publishAt: validPublishAt,
+      status: validPublishAt ? "scheduled" : "draft",
+    });
+
+    if (selectedMedia.length > 0) {
+      await tx.insert(schema.postMedia).values(
+        selectedMedia.map((media) => ({
+          postId,
+          mediaId: media.id,
+        })),
+      );
+    }
   });
 
   revalidatePath("/dashboard");

@@ -121,7 +121,7 @@ export default function Home() {
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <a
-                href="#waitlist"
+                href="/login"
                 className="inline-flex h-11 items-center justify-center rounded-lg bg-emerald-600 px-5 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/30"
               >
                 Start scheduling
@@ -333,6 +333,12 @@ export default function Home() {
           <p className="mt-3 text-sm text-emerald-50">
             Free during v1. No billing setup required.
           </p>
+          <a
+            href="/login"
+            className="mt-5 inline-flex h-10 items-center justify-center rounded-lg border border-white/40 bg-white px-4 text-sm font-medium text-emerald-800 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-white/40"
+          >
+            Sign in with Google
+          </a>
         </div>
       </section>
 

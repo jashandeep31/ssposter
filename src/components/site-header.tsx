@@ -45,7 +45,7 @@ export function SiteHeader() {
 
         <div className="hidden items-center gap-2 md:flex">
           <a
-            href="#waitlist"
+            href="/login"
             className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/30"
           >
             Start scheduling
@@ -86,7 +86,7 @@ export function SiteHeader() {
             </a>
           ))}
           <a
-            href="#waitlist"
+            href="/login"
             className="mt-2 inline-flex h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/30"
             onClick={closeMenu}
           >

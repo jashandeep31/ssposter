@@ -4,6 +4,7 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
@@ -103,6 +104,23 @@ export const post = pgTable(
   ],
 );
 
+export const postMedia = pgTable(
+  "post_media",
+  {
+    postId: text("post_id")
+      .notNull()
+      .references(() => post.id, { onDelete: "cascade" }),
+    mediaId: text("media_id")
+      .notNull()
+      .references(() => userMedia.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.postId, table.mediaId] }),
+    index("post_media_mediaId_idx").on(table.mediaId),
+  ],
+);
+
 export const userMedia = pgTable(
   "user_media",
   {
@@ -150,16 +168,29 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
-export const postRelations = relations(post, ({ one }) => ({
+export const postRelations = relations(post, ({ many, one }) => ({
   user: one(user, {
     fields: [post.userId],
     references: [user.id],
   }),
+  media: many(postMedia),
 }));
 
-export const userMediaRelations = relations(userMedia, ({ one }) => ({
+export const userMediaRelations = relations(userMedia, ({ many, one }) => ({
   user: one(user, {
     fields: [userMedia.userId],
     references: [user.id],
+  }),
+  posts: many(postMedia),
+}));
+
+export const postMediaRelations = relations(postMedia, ({ one }) => ({
+  post: one(post, {
+    fields: [postMedia.postId],
+    references: [post.id],
+  }),
+  media: one(userMedia, {
+    fields: [postMedia.mediaId],
+    references: [userMedia.id],
   }),
 }));

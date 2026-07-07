@@ -1,0 +1,2 @@
+ALTER TABLE "post" ADD COLUMN "media_id" text;--> statement-breakpoint
+ALTER TABLE "post" ADD CONSTRAINT "post_media_id_user_media_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."user_media"("id") ON DELETE set null ON UPDATE no action;

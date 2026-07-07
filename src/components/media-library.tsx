@@ -144,7 +144,7 @@ export function MediaLibrary({
   }
 
   return (
-    <section className="rounded-lg border border-emerald-100 bg-white p-4 shadow-sm shadow-emerald-950/5 sm:p-6">
+    <section className="min-w-0 rounded-lg border border-emerald-100 bg-white p-4 shadow-sm shadow-emerald-950/5 sm:p-6">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase text-emerald-700">
@@ -165,7 +165,7 @@ export function MediaLibrary({
         <label htmlFor="media-search" className="sr-only">
           Search media
         </label>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <div className="relative min-w-0 flex-1">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400"
@@ -182,7 +182,7 @@ export function MediaLibrary({
           </div>
           <button
             type="submit"
-            className="inline-flex h-11 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-white px-4 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/20"
+            className="inline-flex h-11 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-white px-4 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/20 sm:w-auto"
           >
             Search
           </button>
@@ -205,12 +205,12 @@ export function MediaLibrary({
             return (
               <article
                 key={item.id}
-                className="rounded-lg border border-emerald-100 bg-zinc-50 p-4"
+                className="min-w-0 overflow-hidden rounded-lg border border-emerald-100 bg-zinc-50 p-4"
               >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0 flex-1">
                     {isEditing ? (
-                      <label className="block">
+                      <label className="block min-w-0">
                         <span className="sr-only">Media name</span>
                         <input
                           value={editingName}
@@ -218,15 +218,15 @@ export function MediaLibrary({
                           onChange={(event) =>
                             setEditingName(event.target.value)
                           }
-                          className="h-10 w-full rounded-lg border border-emerald-200 bg-white px-3 text-sm font-medium outline-none transition-colors focus:border-emerald-500 focus:ring-3 focus:ring-emerald-600/20"
+                          className="h-10 w-full min-w-0 rounded-lg border border-emerald-200 bg-white px-3 text-sm font-medium outline-none transition-colors focus:border-emerald-500 focus:ring-3 focus:ring-emerald-600/20"
                         />
                       </label>
                     ) : (
-                      <h2 className="truncate text-sm font-semibold text-zinc-950">
+                      <h2 className="break-all text-sm font-semibold text-zinc-950 sm:truncate">
                         {item.displayName}
                       </h2>
                     )}
-                    <p className="mt-1 truncate text-sm text-zinc-500">
+                    <p className="mt-1 break-all text-sm text-zinc-500 sm:truncate">
                       {item.fileName}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
@@ -237,7 +237,7 @@ export function MediaLibrary({
                   </div>
 
                   {isEditing ? (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap">
                       <button
                         type="button"
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/30 disabled:pointer-events-none disabled:opacity-60"
@@ -264,7 +264,7 @@ export function MediaLibrary({
                       </button>
                     </div>
                   ) : isConfirmingDelete ? (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap">
                       <button
                         type="button"
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-red-600 px-3 text-sm font-medium text-white transition-colors hover:bg-red-700 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-red-600/30 disabled:pointer-events-none disabled:opacity-60"
@@ -291,7 +291,7 @@ export function MediaLibrary({
                       </button>
                     </div>
                   ) : (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap">
                       <button
                         type="button"
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/20 disabled:pointer-events-none disabled:opacity-60"

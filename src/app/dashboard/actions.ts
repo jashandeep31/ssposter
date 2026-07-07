@@ -8,13 +8,17 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { auth } from "@/lib/auth";
 import {
+  isAllowedMediaContentType,
+  isSupportedPlatform,
+  validateMediaSelection,
+} from "@/lib/media-guidelines";
+import {
   createMediaObjectKey,
   createReadUrl,
   createUploadUrl,
   deleteMediaObject,
   getMaxUploadBytes,
   getUserMediaPrefix,
-  isAllowedMediaContentType,
 } from "@/lib/r2";
 
 type MediaActionResult<T> =
@@ -46,7 +50,7 @@ export async function createPost(formData: FormData) {
   const platforms = formData
     .getAll("platforms")
     .map(String)
-    .filter((platform) => platform === "x" || platform === "linkedin");
+    .filter(isSupportedPlatform);
   const publishDate = String(formData.get("publishDate") ?? "");
   const publishTime = String(formData.get("publishTime") ?? "");
   const mediaIds = Array.from(
@@ -79,6 +83,18 @@ export async function createPost(formData: FormData) {
           ),
       })
     : [];
+  const mediaValidation = validateMediaSelection({
+    platforms,
+    media: selectedMedia.map((media) => ({
+      id: media.id,
+      contentType: media.contentType,
+    })),
+  });
+
+  if (!mediaValidation.ok || selectedMedia.length !== mediaIds.length) {
+    return;
+  }
+
   const postId = crypto.randomUUID();
 
   await db.transaction(async (tx) => {
@@ -129,7 +145,7 @@ export async function createMediaUpload({
   }
 
   if (!isAllowedMediaContentType(contentType)) {
-    return { ok: false, error: "Use a JPEG, PNG, WebP, or GIF image." };
+    return { ok: false, error: "Use a JPG, PNG, or GIF image." };
   }
 
   if (!Number.isFinite(size) || size <= 0 || size > getMaxUploadBytes()) {
@@ -175,7 +191,7 @@ export async function registerUploadedMedia({
   }
 
   if (!isAllowedMediaContentType(contentType)) {
-    return { ok: false, error: "Use a JPEG, PNG, WebP, or GIF image." };
+    return { ok: false, error: "Use a JPG, PNG, or GIF image." };
   }
 
   if (!Number.isFinite(size) || size <= 0 || size > getMaxUploadBytes()) {

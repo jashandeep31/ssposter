@@ -7,6 +7,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
@@ -63,6 +64,43 @@ export const account = pgTable(
       .notNull(),
   },
   (table) => [index("account_userId_idx").on(table.userId)],
+);
+
+export const connectedAccount = pgTable(
+  "connected_account",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    platform: text("platform").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
+    displayName: text("display_name"),
+    username: text("username"),
+    avatarUrl: text("avatar_url"),
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token"),
+    tokenType: text("token_type"),
+    scope: text("scope"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at"),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+    status: text("status").default("active").notNull(),
+    metadata: text("metadata"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("connected_account_userId_idx").on(table.userId),
+    index("connected_account_platform_idx").on(table.platform),
+    uniqueIndex("connected_account_user_platform_provider_unique").on(
+      table.userId,
+      table.platform,
+      table.providerAccountId,
+    ),
+  ],
 );
 
 export const verification = pgTable(
@@ -150,6 +188,7 @@ export const userMedia = pgTable(
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
+  connectedAccounts: many(connectedAccount),
   posts: many(post),
   media: many(userMedia),
 }));
@@ -167,6 +206,16 @@ export const accountRelations = relations(account, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const connectedAccountRelations = relations(
+  connectedAccount,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [connectedAccount.userId],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const postRelations = relations(post, ({ many, one }) => ({
   user: one(user, {

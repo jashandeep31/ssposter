@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { SiteHeader } from "@/components/site-header";
 
 const features = [
   {
@@ -98,44 +99,10 @@ const faqs = [
   },
 ];
 
-const navItems = [
-  { label: "Features", href: "#features" },
-  { label: "Workflow", href: "#workflow" },
-  { label: "Platforms", href: "#platforms" },
-  { label: "FAQ", href: "#faq" },
-];
-
 export default function Home() {
   return (
     <main className="min-h-screen bg-white text-zinc-950">
-      <header className="sticky top-0 z-50 border-b border-emerald-100/80 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-3 px-3 sm:h-16 sm:px-6 lg:px-8">
-          <a
-            href="#"
-            className="flex min-w-0 items-center gap-2"
-            aria-label="ssposter home"
-          >
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-sm font-semibold text-white">
-              ss
-            </span>
-            <span className="truncate text-base font-semibold">ssposter</span>
-          </a>
-          <nav className="hidden items-center gap-7 text-sm font-medium text-zinc-600 md:flex">
-            {navItems.map((item) => (
-              <a key={item.href} href={item.href} className="hover:text-emerald-700">
-                {item.label}
-              </a>
-            ))}
-          </nav>
-          <a
-            href="#waitlist"
-            className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-3 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/30 sm:px-4"
-          >
-            <span className="sm:hidden">Start</span>
-            <span className="hidden sm:inline">Start scheduling</span>
-          </a>
-        </div>
-      </header>
+      <SiteHeader />
 
       <section className="border-b border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f0fdf4_100%)]">
         <div className="mx-auto grid w-full max-w-6xl gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:px-8 lg:py-24">
@@ -408,11 +375,18 @@ export default function Home() {
             </p>
           </div>
           <nav className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium text-zinc-600">
-            {navItems.map((item) => (
-              <a key={item.href} href={item.href} className="hover:text-emerald-700">
-                {item.label}
-              </a>
-            ))}
+            <a href="#features" className="hover:text-emerald-700">
+              Features
+            </a>
+            <a href="#workflow" className="hover:text-emerald-700">
+              Workflow
+            </a>
+            <a href="#platforms" className="hover:text-emerald-700">
+              Platforms
+            </a>
+            <a href="#faq" className="hover:text-emerald-700">
+              FAQ
+            </a>
           </nav>
         </div>
       </footer>

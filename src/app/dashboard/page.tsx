@@ -9,15 +9,11 @@ import {
 } from "lucide-react";
 
 import { createPost } from "@/app/dashboard/actions";
-import { SignOutButton } from "@/components/sign-out-button";
+import { DashboardNavbar } from "@/components/dashboard-navbar";
+import { MediaPickerDialog } from "@/components/media-picker-dialog";
 import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { getMediaFileName } from "@/lib/r2";
-
-const navItems = [
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Media", href: "/dashboard/media" },
-];
 
 function formatPublishTime(value: Date | null) {
   if (!value) {
@@ -90,43 +86,12 @@ export default async function DashboardPage() {
     id: item.id,
     displayName: item.displayName,
     fileName: getMediaFileName(item.mediaUrl),
+    contentType: item.contentType,
   }));
 
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-950">
-      <header className="border-b border-emerald-100 bg-white">
-        <div className="mx-auto flex min-h-16 w-full max-w-6xl flex-col items-stretch gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 flex-col gap-3 sm:flex-1 sm:flex-row sm:items-center sm:gap-5">
-            <Link
-              href="/"
-              className="flex min-w-0 items-center gap-2"
-              aria-label="ssposter home"
-            >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-sm font-semibold text-white">
-                ss
-              </span>
-              <span className="truncate text-lg font-semibold">ssposter</span>
-            </Link>
-
-            <nav
-              className="flex min-w-0 items-center gap-1 overflow-x-auto text-sm font-medium sm:shrink-0"
-              aria-label="Dashboard navigation"
-            >
-              {navItems.map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className="inline-flex h-9 items-center rounded-lg px-3 text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
-
-          <SignOutButton />
-        </div>
-      </header>
+      <DashboardNavbar />
 
         <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:px-8">
         <aside className="space-y-4">
@@ -233,29 +198,7 @@ export default async function DashboardPage() {
                   Media
                 </legend>
                 {mediaOptions.length > 0 ? (
-                  <div className="mt-2 grid gap-2 md:grid-cols-2">
-                    {mediaOptions.map((item) => (
-                      <label
-                        key={item.id}
-                        className="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border border-emerald-100 bg-zinc-50 px-3 py-3 text-sm text-zinc-800"
-                      >
-                        <input
-                          type="checkbox"
-                          name="mediaIds"
-                          value={item.id}
-                          className="mt-0.5 size-4 shrink-0 accent-emerald-600"
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-medium">
-                            {item.displayName}
-                          </span>
-                          <span className="mt-1 block truncate text-xs text-zinc-500">
-                            {item.fileName}
-                          </span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
+                  <MediaPickerDialog media={mediaOptions} />
                 ) : (
                   <p className="mt-2 rounded-lg bg-zinc-50 px-4 py-5 text-sm text-zinc-600">
                     Upload media from the{" "}
@@ -268,12 +211,6 @@ export default async function DashboardPage() {
                     before attaching it to a post.
                   </p>
                 )}
-                {mediaOptions.length > 0 ? (
-                  <p className="mt-2 text-xs text-zinc-500">
-                    Select any number of uploaded media files to attach to this
-                    post.
-                  </p>
-                ) : null}
               </fieldset>
 
               <div className="grid gap-4 sm:grid-cols-2">

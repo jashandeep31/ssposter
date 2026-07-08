@@ -1,3 +1,5 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import {
   CalendarClock,
   CheckCircle2,
@@ -11,6 +13,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { SiteHeader } from "@/components/site-header";
+import { auth } from "@/lib/auth";
 
 const features = [
   {
@@ -99,7 +102,15 @@ const faqs = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (session) {
+    redirect("/dashboard");
+  }
+
   return (
     <main className="min-h-screen bg-white text-zinc-950">
       <SiteHeader />

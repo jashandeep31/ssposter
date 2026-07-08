@@ -8,13 +8,10 @@ import {
   createMediaUpload,
   registerUploadedMedia,
 } from "@/app/dashboard/actions";
-
-const allowedContentTypes = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-];
+import {
+  allowedMediaContentTypes,
+  isAllowedMediaContentType,
+} from "@/lib/media-guidelines";
 
 type MediaUploaderProps = {
   maxUploadBytes: number;
@@ -44,8 +41,8 @@ export function MediaUploader({ maxUploadBytes }: MediaUploaderProps) {
 
     setMessage(null);
 
-    if (!allowedContentTypes.includes(file.type)) {
-      setMessage("Use a JPEG, PNG, WebP, or GIF image.");
+    if (!isAllowedMediaContentType(file.type)) {
+      setMessage("Use a JPG, PNG, or GIF image.");
       event.target.value = "";
       return;
     }
@@ -109,17 +106,17 @@ export function MediaUploader({ maxUploadBytes }: MediaUploaderProps) {
   }
 
   return (
-    <div>
+    <div className="w-full lg:w-auto">
       <input
         ref={inputRef}
         type="file"
-        accept={allowedContentTypes.join(",")}
+        accept={allowedMediaContentTypes.join(",")}
         className="sr-only"
         onChange={handleFileChange}
       />
       <button
         type="button"
-        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/30 disabled:pointer-events-none disabled:opacity-60"
+        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/30 disabled:pointer-events-none disabled:opacity-60 lg:w-auto"
         onClick={() => inputRef.current?.click()}
         disabled={isUploading || isPending}
       >
@@ -132,7 +129,7 @@ export function MediaUploader({ maxUploadBytes }: MediaUploaderProps) {
       </button>
 
       <p className="mt-2 text-xs text-zinc-500">
-        JPEG, PNG, WebP, or GIF. Max {formatBytes(maxUploadBytes)}.
+        JPG, PNG, or GIF. Max {formatBytes(maxUploadBytes)}.
       </p>
 
       {message ? (

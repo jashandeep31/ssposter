@@ -8,14 +8,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-export const allowedMediaContentTypes = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-] as const;
-
-export type AllowedMediaContentType = (typeof allowedMediaContentTypes)[number];
+import { type AllowedMediaContentType } from "@/lib/media-guidelines";
 
 let r2Client: S3Client | null = null;
 
@@ -76,14 +69,6 @@ export function getMediaReadTtlSeconds() {
 
 export function getMaxUploadBytes() {
   return getPositiveIntegerEnv("R2_MAX_UPLOAD_BYTES", 5 * 1024 * 1024);
-}
-
-export function isAllowedMediaContentType(
-  contentType: string,
-): contentType is AllowedMediaContentType {
-  return allowedMediaContentTypes.includes(
-    contentType as AllowedMediaContentType,
-  );
 }
 
 function sanitizeFileName(fileName: string) {

@@ -19,7 +19,10 @@ export async function GET(
 ) {
   const session = await getRequiredSession();
   const { platform } = await params;
-  const accountsUrl = new URL("/dashboard/accounts", request.url);
+  const accountsUrl = new URL(
+    "/dashboard/accounts",
+    process.env.BETTER_AUTH_URL ?? request.url,
+  );
 
   if (!isConnectedAccountPlatform(platform)) {
     accountsUrl.searchParams.set("error", "unsupported-platform");

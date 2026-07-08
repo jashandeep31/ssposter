@@ -20,7 +20,12 @@ export async function GET(
   const { platform } = await params;
 
   if (!isConnectedAccountPlatform(platform)) {
-    return NextResponse.redirect(new URL("/dashboard/accounts?error=unsupported-platform", _request.url));
+    return NextResponse.redirect(
+      new URL(
+        "/dashboard/accounts?error=unsupported-platform",
+        process.env.BETTER_AUTH_URL ?? _request.url,
+      ),
+    );
   }
 
   const state = createOAuthState(platform);

@@ -21,6 +21,8 @@ import {
   getUserMediaPrefix,
 } from "@/lib/r2";
 
+const minimumScheduleLeadMs = 30 * 60 * 1000;
+
 type MediaActionResult<T> =
   | ({ ok: true } & T)
   | {
@@ -69,8 +71,14 @@ export async function createPost(formData: FormData) {
       : null;
   const validPublishAt =
     publishAt && Number.isNaN(publishAt.getTime()) ? null : publishAt;
+  const canSchedule =
+    validPublishAt && validPublishAt.getTime() >= Date.now() + minimumScheduleLeadMs;
 
   if (!content || content.length > 2800 || platforms.length === 0) {
+    return;
+  }
+
+  if (intent === "schedule" && !canSchedule) {
     return;
   }
 
@@ -103,9 +111,102 @@ export async function createPost(formData: FormData) {
       userId: session.user.id,
       content,
       platforms: platforms.join(","),
-      publishAt: validPublishAt,
-      status: validPublishAt ? "scheduled" : "draft",
+      publishAt: intent === "schedule" ? validPublishAt : null,
+      status: intent === "schedule" ? "scheduled" : "draft",
     });
+
+    if (selectedMedia.length > 0) {
+      await tx.insert(schema.postMedia).values(
+        selectedMedia.map((media) => ({
+          postId,
+          mediaId: media.id,
+        })),
+      );
+    }
+  });
+
+  revalidatePath("/dashboard");
+}
+
+export async function updatePost(postId: string, formData: FormData) {
+  const session = await getRequiredSession();
+  const post = await db.query.post.findFirst({
+    where: (item) => and(eq(item.id, postId), eq(item.userId, session.user.id)),
+  });
+
+  if (!post || (post.status !== "draft" && post.status !== "scheduled")) {
+    return;
+  }
+
+  const content = String(formData.get("content") ?? "").trim();
+  const platforms = formData
+    .getAll("platforms")
+    .map(String)
+    .filter(isSupportedPlatform);
+  const publishDate = String(formData.get("publishDate") ?? "");
+  const publishTime = String(formData.get("publishTime") ?? "");
+  const mediaIds = Array.from(
+    new Set(
+      formData
+        .getAll("mediaIds")
+        .map(String)
+        .map((mediaId) => mediaId.trim())
+        .filter(Boolean),
+    ),
+  );
+  const intent = String(formData.get("intent") ?? "schedule");
+  const publishAt =
+    intent === "schedule" && publishDate && publishTime
+      ? new Date(`${publishDate}T${publishTime}:00`)
+      : null;
+  const validPublishAt =
+    publishAt && Number.isNaN(publishAt.getTime()) ? null : publishAt;
+  const canSchedule =
+    validPublishAt && validPublishAt.getTime() >= Date.now() + minimumScheduleLeadMs;
+
+  if (!content || content.length > 2800 || platforms.length === 0) {
+    return;
+  }
+
+  if (intent === "schedule" && !canSchedule) {
+    return;
+  }
+
+  const selectedMedia = mediaIds.length
+    ? await db.query.userMedia.findMany({
+        where: (userMedia) =>
+          and(
+            inArray(userMedia.id, mediaIds),
+            eq(userMedia.userId, session.user.id),
+          ),
+      })
+    : [];
+  const mediaValidation = validateMediaSelection({
+    platforms,
+    media: selectedMedia.map((media) => ({
+      id: media.id,
+      contentType: media.contentType,
+    })),
+  });
+
+  if (!mediaValidation.ok || selectedMedia.length !== mediaIds.length) {
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.post)
+      .set({
+        content,
+        platforms: platforms.join(","),
+        publishAt: intent === "schedule" ? validPublishAt : null,
+        status: intent === "schedule" ? "scheduled" : "draft",
+      })
+      .where(and(eq(schema.post.id, postId), eq(schema.post.userId, session.user.id)));
+
+    await tx
+      .delete(schema.postMedia)
+      .where(eq(schema.postMedia.postId, postId));
 
     if (selectedMedia.length > 0) {
       await tx.insert(schema.postMedia).values(

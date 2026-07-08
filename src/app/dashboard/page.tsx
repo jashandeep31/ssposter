@@ -11,9 +11,31 @@ import {
 import { createPost } from "@/app/dashboard/actions";
 import { DashboardNavbar } from "@/components/dashboard-navbar";
 import { MediaPickerDialog } from "@/components/media-picker-dialog";
+import { PostEditorDialog } from "@/components/post-editor-dialog";
+import { SchedulePicker } from "@/components/schedule-picker";
 import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { getMediaFileName } from "@/lib/r2";
+
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function formatDateInput(value: Date | null) {
+  if (!value) {
+    return "";
+  }
+
+  return `${value.getFullYear()}-${padDatePart(value.getMonth() + 1)}-${padDatePart(value.getDate())}`;
+}
+
+function formatTimeInput(value: Date | null) {
+  if (!value) {
+    return "";
+  }
+
+  return `${padDatePart(value.getHours())}:${padDatePart(value.getMinutes())}`;
+}
 
 function formatPublishTime(value: Date | null) {
   if (!value) {
@@ -60,6 +82,9 @@ export default async function DashboardPage() {
     db.query.post.findMany({
       where: (post, { eq }) => eq(post.userId, session.user.id),
       orderBy: (post, { desc }) => [desc(post.createdAt)],
+      with: {
+        media: true,
+      },
     }),
     db.query.userMedia.findMany({
       where: (userMedia, { eq }) => eq(userMedia.userId, session.user.id),
@@ -213,36 +238,7 @@ export default async function DashboardPage() {
                 )}
               </fieldset>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="publish-date"
-                    className="text-sm font-medium text-zinc-800"
-                  >
-                    Publish date
-                  </label>
-                  <input
-                    id="publish-date"
-                    name="publishDate"
-                    type="date"
-                    className="mt-2 h-11 w-full rounded-lg border border-emerald-100 bg-white px-3 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-3 focus:ring-emerald-600/20"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="publish-time"
-                    className="text-sm font-medium text-zinc-800"
-                  >
-                    Publish time
-                  </label>
-                  <input
-                    id="publish-time"
-                    name="publishTime"
-                    type="time"
-                    className="mt-2 h-11 w-full rounded-lg border border-emerald-100 bg-white px-3 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-3 focus:ring-emerald-600/20"
-                  />
-                </div>
-              </div>
+              <SchedulePicker />
 
               <div className="flex flex-col-reverse gap-3 border-t border-emerald-100 pt-5 sm:flex-row sm:justify-end">
                 <button
@@ -344,9 +340,25 @@ export default async function DashboardPage() {
                         .join(" and ")}
                     </p>
                   </div>
-                  <p className="text-sm font-medium text-zinc-700">
-                    {formatPublishTime(post.publishAt)}
-                  </p>
+                  <div className="flex items-center gap-3 sm:justify-end">
+                    <p className="text-sm font-medium text-zinc-700">
+                      {formatPublishTime(post.publishAt)}
+                    </p>
+                    {post.status === "draft" || post.status === "scheduled" ? (
+                      <PostEditorDialog
+                        post={{
+                          id: post.id,
+                          content: post.content,
+                          platforms: post.platforms.split(","),
+                          status: post.status,
+                          publishDate: formatDateInput(post.publishAt),
+                          publishTime: formatTimeInput(post.publishAt),
+                          mediaIds: post.media.map((item) => item.mediaId),
+                        }}
+                        media={mediaOptions}
+                      />
+                    ) : null}
+                  </div>
                 </article>
                 ))}
               </div>

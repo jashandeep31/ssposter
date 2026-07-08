@@ -30,6 +30,7 @@ export type MediaPickerItem = {
 
 type MediaPickerDialogProps = {
   media: MediaPickerItem[];
+  initialSelectedIds?: string[];
 };
 
 type ThumbnailState = {
@@ -37,10 +38,13 @@ type ThumbnailState = {
   error?: string;
 };
 
-export function MediaPickerDialog({ media }: MediaPickerDialogProps) {
+export function MediaPickerDialog({
+  media,
+  initialSelectedIds = [],
+}: MediaPickerDialogProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>(initialSelectedIds);
   const [draftSelectedIds, setDraftSelectedIds] = useState<string[]>([]);
   const [selectedPlatforms, setSelectedPlatforms] = useState<
     SupportedPlatform[]

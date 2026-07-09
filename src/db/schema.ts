@@ -129,6 +129,10 @@ export const post = pgTable(
     content: text("content").notNull(),
     platforms: text("platforms").notNull(),
     publishAt: timestamp("publish_at"),
+    publishVersion: integer("publish_version").default(1).notNull(),
+    queuedAt: timestamp("queued_at"),
+    publishedAt: timestamp("published_at"),
+    lastPublishError: text("last_publish_error"),
     status: text("status").default("draft").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -139,6 +143,42 @@ export const post = pgTable(
   (table) => [
     index("post_userId_idx").on(table.userId),
     index("post_status_idx").on(table.status),
+  ],
+);
+
+export const postPublish = pgTable(
+  "post_publish",
+  {
+    id: text("id").primaryKey(),
+    postId: text("post_id")
+      .notNull()
+      .references(() => post.id, { onDelete: "cascade" }),
+    platform: text("platform").notNull(),
+    connectedAccountId: text("connected_account_id").references(
+      () => connectedAccount.id,
+      { onDelete: "set null" },
+    ),
+    publishVersion: integer("publish_version").notNull(),
+    status: text("status").default("pending").notNull(),
+    providerPostId: text("provider_post_id"),
+    error: text("error"),
+    attempts: integer("attempts").default(0).notNull(),
+    lastAttemptAt: timestamp("last_attempt_at"),
+    publishedAt: timestamp("published_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("post_publish_postId_idx").on(table.postId),
+    index("post_publish_status_idx").on(table.status),
+    uniqueIndex("post_publish_post_platform_version_unique").on(
+      table.postId,
+      table.platform,
+      table.publishVersion,
+    ),
   ],
 );
 
@@ -209,11 +249,12 @@ export const accountRelations = relations(account, ({ one }) => ({
 
 export const connectedAccountRelations = relations(
   connectedAccount,
-  ({ one }) => ({
+  ({ many, one }) => ({
     user: one(user, {
       fields: [connectedAccount.userId],
       references: [user.id],
     }),
+    publishes: many(postPublish),
   }),
 );
 
@@ -223,6 +264,18 @@ export const postRelations = relations(post, ({ many, one }) => ({
     references: [user.id],
   }),
   media: many(postMedia),
+  publishes: many(postPublish),
+}));
+
+export const postPublishRelations = relations(postPublish, ({ one }) => ({
+  post: one(post, {
+    fields: [postPublish.postId],
+    references: [post.id],
+  }),
+  connectedAccount: one(connectedAccount, {
+    fields: [postPublish.connectedAccountId],
+    references: [connectedAccount.id],
+  }),
 }));
 
 export const userMediaRelations = relations(userMedia, ({ many, one }) => ({

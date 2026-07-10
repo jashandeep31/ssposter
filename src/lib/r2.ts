@@ -132,6 +132,21 @@ export async function createReadUrl(objectKey: string) {
   return { readUrl, expiresIn };
 }
 
+export async function getMediaObjectBytes(objectKey: string) {
+  const response = await getR2Client().send(
+    new GetObjectCommand({
+      Bucket: getR2BucketName(),
+      Key: objectKey,
+    }),
+  );
+
+  if (!response.Body) {
+    throw new Error("Media object has no response body.");
+  }
+
+  return Buffer.from(await response.Body.transformToByteArray());
+}
+
 export async function deleteMediaObject(objectKey: string) {
   await getR2Client().send(
     new DeleteObjectCommand({

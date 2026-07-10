@@ -20,6 +20,7 @@ import {
   getMaxUploadBytes,
   getUserMediaPrefix,
 } from "@/lib/r2";
+import { queuePostPublish } from "@/lib/qstash";
 
 const minimumScheduleLeadMs = 30 * 60 * 1000;
 
@@ -104,6 +105,7 @@ export async function createPost(formData: FormData) {
   }
 
   const postId = crypto.randomUUID();
+  const publishVersion = 1;
 
   await db.transaction(async (tx) => {
     await tx.insert(schema.post).values({
@@ -112,6 +114,7 @@ export async function createPost(formData: FormData) {
       content,
       platforms: platforms.join(","),
       publishAt: intent === "schedule" ? validPublishAt : null,
+      publishVersion,
       status: intent === "schedule" ? "scheduled" : "draft",
     });
 
@@ -123,7 +126,41 @@ export async function createPost(formData: FormData) {
         })),
       );
     }
+
+    if (intent === "schedule" && platforms.includes("linkedin")) {
+      await tx.insert(schema.postPublish).values({
+        id: crypto.randomUUID(),
+        postId,
+        platform: "linkedin",
+        publishVersion,
+        status: "pending",
+      });
+    }
   });
+
+  if (intent === "schedule") {
+    try {
+      await queuePostPublish({
+        postId,
+        publishAt: validPublishAt as Date,
+        publishVersion,
+      });
+
+      await db
+        .update(schema.post)
+        .set({ queuedAt: new Date(), lastPublishError: null })
+        .where(and(eq(schema.post.id, postId), eq(schema.post.userId, session.user.id)));
+    } catch (error) {
+      console.error("Failed to queue scheduled post", error);
+      await db
+        .update(schema.post)
+        .set({
+          status: "failed",
+          lastPublishError: "Could not queue scheduled publish job.",
+        })
+        .where(and(eq(schema.post.id, postId), eq(schema.post.userId, session.user.id)));
+    }
+  }
 
   revalidatePath("/dashboard");
 }
@@ -193,6 +230,9 @@ export async function updatePost(postId: string, formData: FormData) {
     return;
   }
 
+  const nextPublishVersion =
+    intent === "schedule" ? post.publishVersion + 1 : post.publishVersion;
+
   await db.transaction(async (tx) => {
     await tx
       .update(schema.post)
@@ -200,6 +240,10 @@ export async function updatePost(postId: string, formData: FormData) {
         content,
         platforms: platforms.join(","),
         publishAt: intent === "schedule" ? validPublishAt : null,
+        publishVersion: nextPublishVersion,
+        queuedAt: null,
+        publishedAt: null,
+        lastPublishError: null,
         status: intent === "schedule" ? "scheduled" : "draft",
       })
       .where(and(eq(schema.post.id, postId), eq(schema.post.userId, session.user.id)));
@@ -216,7 +260,45 @@ export async function updatePost(postId: string, formData: FormData) {
         })),
       );
     }
+
+    await tx
+      .delete(schema.postPublish)
+      .where(eq(schema.postPublish.postId, postId));
+
+    if (intent === "schedule" && platforms.includes("linkedin")) {
+      await tx.insert(schema.postPublish).values({
+        id: crypto.randomUUID(),
+        postId,
+        platform: "linkedin",
+        publishVersion: nextPublishVersion,
+        status: "pending",
+      });
+    }
   });
+
+  if (intent === "schedule") {
+    try {
+      await queuePostPublish({
+        postId,
+        publishAt: validPublishAt as Date,
+        publishVersion: nextPublishVersion,
+      });
+
+      await db
+        .update(schema.post)
+        .set({ queuedAt: new Date(), lastPublishError: null })
+        .where(and(eq(schema.post.id, postId), eq(schema.post.userId, session.user.id)));
+    } catch (error) {
+      console.error("Failed to queue scheduled post update", error);
+      await db
+        .update(schema.post)
+        .set({
+          status: "failed",
+          lastPublishError: "Could not queue scheduled publish job.",
+        })
+        .where(and(eq(schema.post.id, postId), eq(schema.post.userId, session.user.id)));
+    }
+  }
 
   revalidatePath("/dashboard");
 }

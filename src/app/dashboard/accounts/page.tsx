@@ -62,7 +62,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     <main className="min-h-screen bg-zinc-50 text-zinc-950">
       <DashboardNavbar />
 
-      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-[1320px] px-4 py-6 sm:px-6 lg:px-8">
         <section className="rounded-lg border border-emerald-100 bg-white p-4 shadow-sm shadow-emerald-950/5 sm:p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-2xl">

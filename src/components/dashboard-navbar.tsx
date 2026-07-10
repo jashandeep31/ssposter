@@ -17,7 +17,7 @@ export function DashboardNavbar() {
 
   return (
     <header className="border-b border-emerald-100 bg-white">
-      <div className="mx-auto flex min-h-16 w-full max-w-6xl flex-col px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-16 w-full max-w-[1320px] flex-col px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center justify-between gap-3 sm:flex-1 sm:justify-start sm:gap-5">
           <Link
             href="/dashboard"

@@ -69,15 +69,6 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const displayName =
-    session.user.name || session.user.email || "there";
-  const email = session.user.email;
-  const initials = displayName
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
   const [allPosts, media] = await Promise.all([
     db.query.post.findMany({
       where: (post, { eq }) => eq(post.userId, session.user.id),
@@ -92,10 +83,6 @@ export default async function DashboardPage() {
     }),
   ]);
   const posts = allPosts.slice(0, 5);
-  const draftCount = allPosts.filter((post) => post.status === "draft").length;
-  const scheduledCount = allPosts.filter(
-    (post) => post.status === "scheduled",
-  ).length;
   const recentMedia = media.slice(0, 3).map((item) => ({
     id: item.id,
     displayName: item.displayName,
@@ -118,34 +105,7 @@ export default async function DashboardPage() {
     <main className="min-h-screen bg-zinc-50 text-zinc-950">
       <DashboardNavbar />
 
-        <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:px-8">
-        <aside className="space-y-4">
-          <section className="rounded-lg border border-emerald-100 bg-white p-4 shadow-sm shadow-emerald-950/5">
-            <div className="flex items-center gap-3">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-sm font-semibold text-emerald-800">
-                {initials || "SS"}
-              </div>
-              <div className="min-w-0">
-                <h1 className="truncate text-base font-semibold">{displayName}</h1>
-                {email ? (
-                  <p className="truncate text-sm text-zinc-500">{email}</p>
-                ) : null}
-              </div>
-            </div>
-            <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-lg bg-zinc-50 p-3">
-                <dt className="text-zinc-500">Drafts</dt>
-                <dd className="mt-1 text-xl font-semibold">{draftCount}</dd>
-              </div>
-              <div className="rounded-lg bg-zinc-50 p-3">
-                <dt className="text-zinc-500">Scheduled</dt>
-                <dd className="mt-1 text-xl font-semibold">{scheduledCount}</dd>
-              </div>
-            </dl>
-          </section>
-
-        </aside>
-
+      <div className="mx-auto w-full max-w-[1320px] px-4 py-6 sm:px-6 lg:px-8">
         <div className="min-w-0 space-y-6">
           <section id="compose" className="rounded-lg border border-emerald-100 bg-white p-4 shadow-sm shadow-emerald-950/5 sm:p-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">

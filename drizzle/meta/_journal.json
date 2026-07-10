@@ -50,6 +50,13 @@
       "when": 1783452221525,
       "tag": "0006_strange_nemesis",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783626096285,
+      "tag": "0007_demonic_silver_centurion",
+      "breakpoints": true
     }
   ]
 }

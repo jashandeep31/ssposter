@@ -1,0 +1,2 @@
+DROP INDEX "post_publish_post_platform_version_unique";--> statement-breakpoint
+CREATE UNIQUE INDEX "post_publish_post_account_version_unique" ON "post_publish" USING btree ("post_id","connected_account_id","publish_version");

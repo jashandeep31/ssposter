@@ -143,6 +143,8 @@ export const post = pgTable(
   (table) => [
     index("post_userId_idx").on(table.userId),
     index("post_status_idx").on(table.status),
+    index("post_userId_createdAt_idx").on(table.userId, table.createdAt),
+    index("post_userId_publishAt_idx").on(table.userId, table.publishAt),
   ],
 );
 
@@ -158,8 +160,14 @@ export const postPublish = pgTable(
       () => connectedAccount.id,
       { onDelete: "set null" },
     ),
+    accountDisplayName: text("account_display_name"),
+    accountUsername: text("account_username"),
+    accountAvatarUrl: text("account_avatar_url"),
     publishVersion: integer("publish_version").notNull(),
     status: text("status").default("pending").notNull(),
+    queuedAt: timestamp("queued_at"),
+    qstashMessageId: text("qstash_message_id"),
+    processingStartedAt: timestamp("processing_started_at"),
     providerPostId: text("provider_post_id"),
     error: text("error"),
     attempts: integer("attempts").default(0).notNull(),
@@ -174,10 +182,35 @@ export const postPublish = pgTable(
   (table) => [
     index("post_publish_postId_idx").on(table.postId),
     index("post_publish_status_idx").on(table.status),
-    uniqueIndex("post_publish_post_platform_version_unique").on(
+    index("post_publish_post_version_idx").on(table.postId, table.publishVersion),
+    uniqueIndex("post_publish_post_account_version_unique").on(
       table.postId,
-      table.platform,
+      table.connectedAccountId,
       table.publishVersion,
+    ),
+  ],
+);
+
+export const postPublishAttempt = pgTable(
+  "post_publish_attempt",
+  {
+    id: text("id").primaryKey(),
+    postPublishId: text("post_publish_id")
+      .notNull()
+      .references(() => postPublish.id, { onDelete: "cascade" }),
+    attempt: integer("attempt").notNull(),
+    status: text("status").notNull(),
+    qstashMessageId: text("qstash_message_id"),
+    error: text("error"),
+    providerPostId: text("provider_post_id"),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => [
+    index("post_publish_attempt_target_idx").on(table.postPublishId),
+    uniqueIndex("post_publish_attempt_target_number_unique").on(
+      table.postPublishId,
+      table.attempt,
     ),
   ],
 );
@@ -267,7 +300,7 @@ export const postRelations = relations(post, ({ many, one }) => ({
   publishes: many(postPublish),
 }));
 
-export const postPublishRelations = relations(postPublish, ({ one }) => ({
+export const postPublishRelations = relations(postPublish, ({ many, one }) => ({
   post: one(post, {
     fields: [postPublish.postId],
     references: [post.id],
@@ -276,7 +309,18 @@ export const postPublishRelations = relations(postPublish, ({ one }) => ({
     fields: [postPublish.connectedAccountId],
     references: [connectedAccount.id],
   }),
+  attempts: many(postPublishAttempt),
 }));
+
+export const postPublishAttemptRelations = relations(
+  postPublishAttempt,
+  ({ one }) => ({
+    publish: one(postPublish, {
+      fields: [postPublishAttempt.postPublishId],
+      references: [postPublish.id],
+    }),
+  }),
+);
 
 export const userMediaRelations = relations(userMedia, ({ many, one }) => ({
   user: one(user, {

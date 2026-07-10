@@ -57,6 +57,20 @@
       "when": 1783626096285,
       "tag": "0007_demonic_silver_centurion",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783667680371,
+      "tag": "0008_cooing_shinobi_shaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783669008497,
+      "tag": "0009_careless_big_bertha",
+      "breakpoints": true
     }
   ]
 }

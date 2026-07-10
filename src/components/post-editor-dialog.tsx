@@ -1,8 +1,12 @@
 "use client";
 
-import { BriefcaseBusiness, CalendarClock, Pencil, Send } from "lucide-react";
+import { CalendarClock, Pencil } from "lucide-react";
 
 import { updatePost } from "@/app/dashboard/actions";
+import {
+  AccountPicker,
+  type AccountPickerItem,
+} from "@/components/account-picker";
 import {
   Dialog,
   DialogContent,
@@ -20,8 +24,7 @@ import { SchedulePicker } from "@/components/schedule-picker";
 type EditablePost = {
   id: string;
   content: string;
-  platforms: string[];
-  status: string;
+  accountIds: string[];
   publishDate: string;
   publishTime: string;
   mediaIds: string[];
@@ -30,9 +33,10 @@ type EditablePost = {
 type PostEditorDialogProps = {
   post: EditablePost;
   media: MediaPickerItem[];
+  accounts: AccountPickerItem[];
 };
 
-export function PostEditorDialog({ post, media }: PostEditorDialogProps) {
+export function PostEditorDialog({ post, media, accounts }: PostEditorDialogProps) {
   const updatePostWithId = updatePost.bind(null, post.id);
 
   return (
@@ -76,38 +80,7 @@ export function PostEditorDialog({ post, media }: PostEditorDialogProps) {
             </div>
           </div>
 
-          <fieldset>
-            <legend className="text-sm font-medium text-zinc-800">
-              Platforms
-            </legend>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-emerald-100 bg-zinc-50 px-3 py-3 text-sm font-medium text-zinc-800">
-                <input
-                  type="checkbox"
-                  name="platforms"
-                  value="x"
-                  defaultChecked={post.platforms.includes("x")}
-                  className="size-4 accent-emerald-600"
-                />
-                <Send className="size-4 text-emerald-700" aria-hidden="true" />
-                X
-              </label>
-              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-emerald-100 bg-zinc-50 px-3 py-3 text-sm font-medium text-zinc-800">
-                <input
-                  type="checkbox"
-                  name="platforms"
-                  value="linkedin"
-                  defaultChecked={post.platforms.includes("linkedin")}
-                  className="size-4 accent-emerald-600"
-                />
-                <BriefcaseBusiness
-                  className="size-4 text-emerald-700"
-                  aria-hidden="true"
-                />
-                LinkedIn
-              </label>
-            </div>
-          </fieldset>
+          <AccountPicker accounts={accounts} initialSelectedIds={post.accountIds} />
 
           <fieldset>
             <legend className="text-sm font-medium text-zinc-800">Media</legend>

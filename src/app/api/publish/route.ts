@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db, schema } from "@/db";
 import { isSupportedPlatform } from "@/lib/media-guidelines";
+import { queuePostPublishTarget } from "@/lib/qstash";
 import { publishPostToPlatform } from "@/lib/social-publishers";
 import { SocialPublishError } from "@/lib/social-publishers/types";
 
@@ -12,6 +13,7 @@ export const runtime = "nodejs";
 const earlyDeliveryToleranceMs = 30 * 1000;
 
 type PublishPayload = {
+  postPublishId?: unknown;
   postId?: unknown;
   publishVersion?: unknown;
 };
@@ -33,21 +35,47 @@ function sanitizeError(error: unknown) {
 }
 
 function isRetryablePublishError(error: unknown) {
-  if (error instanceof SocialPublishError) {
-    return error.retryable;
-  }
-
-  return true;
+  return !(error instanceof SocialPublishError) || error.retryable;
 }
 
-async function markPostFailed(postId: string, error: string) {
+async function refreshPostStatus(postId: string, publishVersion: number) {
+  const rows = await db.query.postPublish.findMany({
+    where: (item, { and: rowAnd, eq: rowEq }) =>
+      rowAnd(rowEq(item.postId, postId), rowEq(item.publishVersion, publishVersion)),
+  });
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  const completed = rows.filter(
+    (row) => row.status === "published" || row.status === "skipped",
+  );
+  const failed = rows.filter((row) => row.status === "failed");
+  const hasInProgress = rows.some(
+    (row) => row.status === "pending" || row.status === "publishing",
+  );
+  const nextStatus =
+    completed.length === rows.length
+      ? "published"
+      : hasInProgress
+        ? "scheduled"
+        : completed.length > 0
+          ? "partial"
+          : "failed";
+  const errors = failed
+    .map((row) => row.error)
+    .filter(Boolean)
+    .join(" ");
+
   await db
     .update(schema.post)
     .set({
-      status: "failed",
-      lastPublishError: error,
+      status: nextStatus,
+      publishedAt: nextStatus === "published" ? new Date() : null,
+      lastPublishError: errors || null,
     })
-    .where(eq(schema.post.id, postId));
+    .where(and(eq(schema.post.id, postId), eq(schema.post.publishVersion, publishVersion)));
 }
 
 async function handler(request: Request) {
@@ -55,7 +83,7 @@ async function handler(request: Request) {
 
   if (
     !payload ||
-    typeof payload.postId !== "string" ||
+    (typeof payload.postPublishId !== "string" && typeof payload.postId !== "string") ||
     typeof payload.publishVersion !== "number" ||
     !Number.isInteger(payload.publishVersion) ||
     payload.publishVersion < 1
@@ -63,8 +91,43 @@ async function handler(request: Request) {
     return NextResponse.json({ error: "Invalid publish payload." }, { status: 400 });
   }
 
+  if (typeof payload.postPublishId !== "string" && typeof payload.postId === "string") {
+    const legacyTargets = await db.query.postPublish.findMany({
+      where: (item, { and: rowAnd, eq: rowEq, inArray: rowInArray }) =>
+        rowAnd(
+          rowEq(item.postId, payload.postId as string),
+          rowEq(item.publishVersion, payload.publishVersion as number),
+          rowInArray(item.status, ["pending", "failed"]),
+        ),
+    });
+
+    await Promise.all(
+      legacyTargets.map(async (target) => {
+        const { messageId } = await queuePostPublishTarget({
+          postPublishId: target.id,
+          publishVersion: target.publishVersion,
+        });
+
+        await db
+          .update(schema.postPublish)
+          .set({ queuedAt: new Date(), qstashMessageId: messageId })
+          .where(eq(schema.postPublish.id, target.id));
+      }),
+    );
+
+    return NextResponse.json({ ok: true, migrated: legacyTargets.length });
+  }
+
+  const publishRow = await db.query.postPublish.findFirst({
+    where: (item, { eq: rowEq }) => rowEq(item.id, payload.postPublishId as string),
+  });
+
+  if (!publishRow || publishRow.publishVersion !== payload.publishVersion) {
+    return NextResponse.json({ ok: true, skipped: "stale-target" });
+  }
+
   const post = await db.query.post.findFirst({
-    where: (item) => eq(item.id, payload.postId as string),
+    where: (item) => eq(item.id, publishRow.postId),
     with: {
       media: {
         with: {
@@ -74,167 +137,148 @@ async function handler(request: Request) {
     },
   });
 
-  if (!post || post.status !== "scheduled") {
-    return NextResponse.json({ ok: true, skipped: "not-scheduled" });
-  }
-
-  if (post.publishVersion !== payload.publishVersion) {
-    return NextResponse.json({ ok: true, skipped: "stale-version" });
-  }
-
   if (
-    post.publishAt &&
-    post.publishAt.getTime() > Date.now() + earlyDeliveryToleranceMs
+    !post ||
+    !["scheduled", "partial", "failed"].includes(post.status) ||
+    post.publishVersion !== payload.publishVersion
   ) {
+    return NextResponse.json({ ok: true, skipped: "not-current" });
+  }
+
+  if (post.publishAt && post.publishAt.getTime() > Date.now() + earlyDeliveryToleranceMs) {
     return NextResponse.json({ ok: true, skipped: "too-early" });
   }
 
-  const publishRows = await db.query.postPublish.findMany({
-    where: (item, { eq: rowEq, and: rowAnd }) =>
-      rowAnd(
-        rowEq(item.postId, post.id),
-        rowEq(item.publishVersion, payload.publishVersion as number),
+  const attemptNumber = publishRow.attempts + 1;
+  const [claimedRow] = await db
+    .update(schema.postPublish)
+    .set({
+      status: "publishing",
+      attempts: attemptNumber,
+      lastAttemptAt: new Date(),
+      processingStartedAt: new Date(),
+      error: null,
+    })
+    .where(
+      and(
+        eq(schema.postPublish.id, publishRow.id),
+        inArray(schema.postPublish.status, ["pending", "failed"]),
       ),
-    orderBy: (item, { asc: rowAsc }) => [rowAsc(item.createdAt)],
-  });
+    )
+    .returning();
 
-  if (publishRows.length === 0) {
-    await markPostFailed(post.id, "No supported publishing platforms were queued.");
-    return NextResponse.json({ ok: true, skipped: "no-publish-rows" });
+  if (!claimedRow) {
+    return NextResponse.json({ ok: true, skipped: "already-processing" });
   }
 
-  for (const publishRow of publishRows) {
-    if (
-      publishRow.status !== "pending" &&
-      publishRow.status !== "failed" &&
-      publishRow.status !== "publishing"
-    ) {
-      continue;
-    }
+  const attemptId = crypto.randomUUID();
+  await db.insert(schema.postPublishAttempt).values({
+    id: attemptId,
+    postPublishId: claimedRow.id,
+    attempt: attemptNumber,
+    status: "publishing",
+    qstashMessageId: claimedRow.qstashMessageId,
+  });
 
-    if (!isSupportedPlatform(publishRow.platform)) {
-      await db
+  if (!isSupportedPlatform(claimedRow.platform)) {
+    const error = `${claimedRow.platform} publishing is not supported.`;
+    await db.transaction(async (tx) => {
+      await tx
         .update(schema.postPublish)
-        .set({
-          status: "skipped",
-          error: `${publishRow.platform} publishing is not supported.`,
-        })
-        .where(eq(schema.postPublish.id, publishRow.id));
-      continue;
-    }
+        .set({ status: "skipped", error, processingStartedAt: null })
+        .where(eq(schema.postPublish.id, claimedRow.id));
+      await tx
+        .update(schema.postPublishAttempt)
+        .set({ status: "skipped", error, completedAt: new Date() })
+        .where(eq(schema.postPublishAttempt.id, attemptId));
+    });
+    await refreshPostStatus(post.id, payload.publishVersion);
+    return NextResponse.json({ ok: true, skipped: "unsupported-platform" });
+  }
 
-    const account = await db.query.connectedAccount.findFirst({
-      where: (item) =>
-        and(
-          eq(item.userId, post.userId),
-          eq(item.platform, publishRow.platform),
-          eq(item.status, "active"),
-        ),
-      orderBy: (item) => [asc(item.createdAt)],
+  const account = claimedRow.connectedAccountId
+    ? await db.query.connectedAccount.findFirst({
+        where: (item) =>
+          and(
+            eq(item.id, claimedRow.connectedAccountId as string),
+            eq(item.userId, post.userId),
+            eq(item.platform, claimedRow.platform),
+            eq(item.status, "active"),
+          ),
+      })
+    : null;
+
+  if (!account) {
+    const error = "The selected publishing account is no longer active.";
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.postPublish)
+        .set({ status: "failed", error, processingStartedAt: null })
+        .where(eq(schema.postPublish.id, claimedRow.id));
+      await tx
+        .update(schema.postPublishAttempt)
+        .set({ status: "failed", error, completedAt: new Date() })
+        .where(eq(schema.postPublishAttempt.id, attemptId));
+    });
+    await refreshPostStatus(post.id, payload.publishVersion);
+    return NextResponse.json({ ok: true, skipped: "inactive-account" });
+  }
+
+  try {
+    const result = await publishPostToPlatform(claimedRow.platform, {
+      postId: post.id,
+      content: post.content,
+      userId: post.userId,
+      account,
+      media: post.media.map((item) => ({
+        id: item.media.id,
+        objectKey: item.media.mediaUrl,
+        displayName: item.media.displayName,
+        contentType: item.media.contentType,
+        sizeBytes: item.media.sizeBytes,
+      })),
     });
 
-    if (!account) {
-      await db
-        .update(schema.postPublish)
-        .set({
-          status: "failed",
-          error: `No active ${publishRow.platform} account is connected.`,
-          lastAttemptAt: new Date(),
-        })
-        .where(eq(schema.postPublish.id, publishRow.id));
-      continue;
-    }
-
-    const attemptStartedAt = new Date();
-
-    await db
-      .update(schema.postPublish)
-      .set({
-        status: "publishing",
-        connectedAccountId: account.id,
-        attempts: publishRow.attempts + 1,
-        lastAttemptAt: attemptStartedAt,
-        error: null,
-      })
-      .where(eq(schema.postPublish.id, publishRow.id));
-
-    try {
-      const result = await publishPostToPlatform(publishRow.platform, {
-        postId: post.id,
-        content: post.content,
-        userId: post.userId,
-        account,
-        media: post.media.map((item) => ({
-          id: item.media.id,
-          objectKey: item.media.mediaUrl,
-          displayName: item.media.displayName,
-          contentType: item.media.contentType,
-          sizeBytes: item.media.sizeBytes,
-        })),
-      });
-
-      await db
+    await db.transaction(async (tx) => {
+      await tx
         .update(schema.postPublish)
         .set({
           status: "published",
           providerPostId: result.providerPostId,
           error: null,
           publishedAt: new Date(),
+          processingStartedAt: null,
         })
-        .where(eq(schema.postPublish.id, publishRow.id));
-    } catch (error) {
-      const errorMessage = sanitizeError(error);
-
-      await db
-        .update(schema.postPublish)
+        .where(eq(schema.postPublish.id, claimedRow.id));
+      await tx
+        .update(schema.postPublishAttempt)
         .set({
-          status: "failed",
-          error: errorMessage,
+          status: "published",
+          providerPostId: result.providerPostId,
+          completedAt: new Date(),
         })
-        .where(eq(schema.postPublish.id, publishRow.id));
+        .where(eq(schema.postPublishAttempt.id, attemptId));
+    });
+  } catch (error) {
+    const errorMessage = sanitizeError(error);
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.postPublish)
+        .set({ status: "failed", error: errorMessage, processingStartedAt: null })
+        .where(eq(schema.postPublish.id, claimedRow.id));
+      await tx
+        .update(schema.postPublishAttempt)
+        .set({ status: "failed", error: errorMessage, completedAt: new Date() })
+        .where(eq(schema.postPublishAttempt.id, attemptId));
+    });
+    await refreshPostStatus(post.id, payload.publishVersion);
 
-      if (isRetryablePublishError(error)) {
-        await db
-          .update(schema.post)
-          .set({ lastPublishError: errorMessage })
-          .where(eq(schema.post.id, post.id));
-
-        throw error;
-      }
+    if (isRetryablePublishError(error)) {
+      throw error;
     }
   }
 
-  const finalRows = await db.query.postPublish.findMany({
-    where: (item, { eq: rowEq, and: rowAnd }) =>
-      rowAnd(
-        rowEq(item.postId, post.id),
-        rowEq(item.publishVersion, payload.publishVersion as number),
-      ),
-  });
-  const completedRows = finalRows.filter(
-    (row) => row.status === "published" || row.status === "skipped",
-  );
-  const failedRows = finalRows.filter((row) => row.status === "failed");
-
-  if (completedRows.length === finalRows.length) {
-    await db
-      .update(schema.post)
-      .set({
-        status: "published",
-        publishedAt: new Date(),
-        lastPublishError: null,
-      })
-      .where(eq(schema.post.id, post.id));
-  } else if (failedRows.length > 0) {
-    await markPostFailed(
-      post.id,
-      failedRows
-        .map((row) => row.error)
-        .filter(Boolean)
-        .join(" "),
-    );
-  }
-
+  await refreshPostStatus(post.id, payload.publishVersion);
   return NextResponse.json({ ok: true });
 }
 

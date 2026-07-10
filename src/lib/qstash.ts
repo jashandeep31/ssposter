@@ -1,9 +1,10 @@
 import { Client } from "@upstash/qstash";
 
-type QueuePostPublishInput = {
-  postId: string;
-  publishAt: Date;
+type QueuePostPublishTargetInput = {
+  postPublishId: string;
   publishVersion: number;
+  publishAt?: Date;
+  deduplicationId?: string;
 };
 
 function getRequiredEnv(name: string) {
@@ -27,19 +28,20 @@ function getQstashClient() {
   });
 }
 
-export async function queuePostPublish({
-  postId,
-  publishAt,
+export async function queuePostPublishTarget({
+  postPublishId,
   publishVersion,
-}: QueuePostPublishInput) {
+  publishAt,
+  deduplicationId,
+}: QueuePostPublishTargetInput) {
   const client = getQstashClient();
   const url = `${getAppUrl()}/api/publish`;
 
-  await client.publishJSON({
+  return client.publishJSON({
     url,
-    body: { postId, publishVersion },
-    deduplicationId: `post:${postId}:v${publishVersion}`,
-    notBefore: Math.floor(publishAt.getTime() / 1000),
+    body: { postPublishId, publishVersion },
+    deduplicationId: deduplicationId ?? `publish:${postPublishId}:v${publishVersion}`,
+    ...(publishAt ? { notBefore: Math.floor(publishAt.getTime() / 1000) } : {}),
     retries: 3,
   });
 }

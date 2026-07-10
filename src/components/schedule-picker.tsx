@@ -3,8 +3,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { CalendarClock } from "lucide-react";
 
-const minimumLeadMinutes = 30;
-
 type ScheduleValue = {
   date: string;
   time: string;
@@ -64,10 +62,6 @@ function getNextWeekend(value: Date) {
   }
 
   return next;
-}
-
-function getMinimumScheduleTime() {
-  return new Date(Date.now() + minimumLeadMinutes * 60 * 1000);
 }
 
 function getScheduledDate({ date, time }: ScheduleValue) {
@@ -146,10 +140,6 @@ function getScheduleError(value: ScheduleValue) {
 
   if (!scheduledDate) {
     return "Choose a valid publish date and time.";
-  }
-
-  if (scheduledDate < getMinimumScheduleTime()) {
-    return "Schedule at least 30 minutes from now.";
   }
 
   return null;
@@ -238,8 +228,7 @@ export function SchedulePicker({
             Schedule time
           </h3>
           <p className="mt-1 text-sm text-zinc-600">
-            Pick a common time or choose your own. Scheduled posts must be at
-            least 30 minutes from now.
+            Pick a common time or choose your own.
           </p>
         </div>
         <button
@@ -323,7 +312,7 @@ export function SchedulePicker({
           </p>
         ) : (
           <p className="text-zinc-600">
-            Save as draft anytime, or choose a valid future time to schedule.
+            Save as draft anytime, or choose a valid date and time to schedule.
           </p>
         )}
         {error ? (

@@ -20,9 +20,7 @@ import {
   getMaxUploadBytes,
   getUserMediaPrefix,
 } from "@/lib/r2";
-import { queuePostPublish } from "@/lib/qstash";
-
-const minimumScheduleLeadMs = 30 * 60 * 1000;
+import { queuePostPublishTarget } from "@/lib/qstash";
 
 type MediaActionResult<T> =
   | ({ ok: true } & T)
@@ -47,13 +45,81 @@ async function getRequiredSession() {
   return session;
 }
 
+async function getSelectedAccounts(accountIds: string[], userId: string) {
+  const uniqueAccountIds = Array.from(
+    new Set(accountIds.map((accountId) => accountId.trim()).filter(Boolean)),
+  );
+
+  if (uniqueAccountIds.length === 0) {
+    return null;
+  }
+
+  const accounts = await db.query.connectedAccount.findMany({
+    where: (connectedAccount) =>
+      and(
+        inArray(connectedAccount.id, uniqueAccountIds),
+        eq(connectedAccount.userId, userId),
+        eq(connectedAccount.status, "active"),
+      ),
+  });
+
+  if (
+    accounts.length !== uniqueAccountIds.length ||
+    !accounts.every((account) => isSupportedPlatform(account.platform))
+  ) {
+    return null;
+  }
+
+  return accounts;
+}
+
+async function queuePostPublishTargets({
+  postId,
+  publishVersion,
+  publishAt,
+  targetIds,
+}: {
+  postId: string;
+  publishVersion: number;
+  publishAt: Date;
+  targetIds: string[];
+}) {
+  const results = await Promise.allSettled(
+    targetIds.map(async (postPublishId) => {
+      const { messageId } = await queuePostPublishTarget({
+        postPublishId,
+        publishVersion,
+        publishAt,
+      });
+
+      await db
+        .update(schema.postPublish)
+        .set({ queuedAt: new Date(), qstashMessageId: messageId })
+        .where(eq(schema.postPublish.id, postPublishId));
+    }),
+  );
+  const failedResult = results.find((result) => result.status === "rejected");
+
+  if (failedResult?.status === "rejected") {
+    throw failedResult.reason;
+  }
+
+  await db
+    .update(schema.post)
+    .set({ queuedAt: new Date(), lastPublishError: null })
+    .where(and(eq(schema.post.id, postId), eq(schema.post.publishVersion, publishVersion)));
+}
+
 export async function createPost(formData: FormData) {
   const session = await getRequiredSession();
   const content = String(formData.get("content") ?? "").trim();
-  const platforms = formData
-    .getAll("platforms")
-    .map(String)
-    .filter(isSupportedPlatform);
+  const selectedAccounts = await getSelectedAccounts(
+    formData.getAll("accountIds").map(String),
+    session.user.id,
+  );
+  const platforms = Array.from(
+    new Set(selectedAccounts?.map((account) => account.platform).filter(isSupportedPlatform)),
+  );
   const publishDate = String(formData.get("publishDate") ?? "");
   const publishTime = String(formData.get("publishTime") ?? "");
   const mediaIds = Array.from(
@@ -72,10 +138,9 @@ export async function createPost(formData: FormData) {
       : null;
   const validPublishAt =
     publishAt && Number.isNaN(publishAt.getTime()) ? null : publishAt;
-  const canSchedule =
-    validPublishAt && validPublishAt.getTime() >= Date.now() + minimumScheduleLeadMs;
+  const canSchedule = validPublishAt;
 
-  if (!content || content.length > 2800 || platforms.length === 0) {
+  if (!selectedAccounts || !content || content.length > 2800 || platforms.length === 0) {
     return;
   }
 
@@ -106,6 +171,10 @@ export async function createPost(formData: FormData) {
 
   const postId = crypto.randomUUID();
   const publishVersion = 1;
+  const publishTargets =
+    intent === "schedule"
+      ? selectedAccounts.map((account) => ({ id: crypto.randomUUID(), account }))
+      : [];
 
   await db.transaction(async (tx) => {
     await tx.insert(schema.post).values({
@@ -127,31 +196,46 @@ export async function createPost(formData: FormData) {
       );
     }
 
-    if (intent === "schedule" && platforms.includes("linkedin")) {
-      await tx.insert(schema.postPublish).values({
-        id: crypto.randomUUID(),
-        postId,
-        platform: "linkedin",
-        publishVersion,
-        status: "pending",
-      });
+    if (intent === "schedule") {
+      await tx.insert(schema.postPublish).values(
+        publishTargets.map(({ id, account }) => ({
+          id,
+          postId,
+          platform: account.platform,
+          connectedAccountId: account.id,
+          accountDisplayName: account.displayName,
+          accountUsername: account.username,
+          accountAvatarUrl: account.avatarUrl,
+          publishVersion,
+          status: "pending",
+        })),
+      );
     }
   });
 
   if (intent === "schedule") {
     try {
-      await queuePostPublish({
+      await queuePostPublishTargets({
         postId,
         publishAt: validPublishAt as Date,
         publishVersion,
+        targetIds: publishTargets.map((target) => target.id),
       });
-
-      await db
-        .update(schema.post)
-        .set({ queuedAt: new Date(), lastPublishError: null })
-        .where(and(eq(schema.post.id, postId), eq(schema.post.userId, session.user.id)));
     } catch (error) {
       console.error("Failed to queue scheduled post", error);
+      await db
+        .update(schema.postPublish)
+        .set({
+          status: "failed",
+          error: "Could not queue scheduled publish job.",
+        })
+        .where(
+          and(
+            eq(schema.postPublish.postId, postId),
+            eq(schema.postPublish.publishVersion, publishVersion),
+            eq(schema.postPublish.status, "pending"),
+          ),
+        );
       await db
         .update(schema.post)
         .set({
@@ -176,10 +260,13 @@ export async function updatePost(postId: string, formData: FormData) {
   }
 
   const content = String(formData.get("content") ?? "").trim();
-  const platforms = formData
-    .getAll("platforms")
-    .map(String)
-    .filter(isSupportedPlatform);
+  const selectedAccounts = await getSelectedAccounts(
+    formData.getAll("accountIds").map(String),
+    session.user.id,
+  );
+  const platforms = Array.from(
+    new Set(selectedAccounts?.map((account) => account.platform).filter(isSupportedPlatform)),
+  );
   const publishDate = String(formData.get("publishDate") ?? "");
   const publishTime = String(formData.get("publishTime") ?? "");
   const mediaIds = Array.from(
@@ -198,10 +285,9 @@ export async function updatePost(postId: string, formData: FormData) {
       : null;
   const validPublishAt =
     publishAt && Number.isNaN(publishAt.getTime()) ? null : publishAt;
-  const canSchedule =
-    validPublishAt && validPublishAt.getTime() >= Date.now() + minimumScheduleLeadMs;
+  const canSchedule = validPublishAt;
 
-  if (!content || content.length > 2800 || platforms.length === 0) {
+  if (!selectedAccounts || !content || content.length > 2800 || platforms.length === 0) {
     return;
   }
 
@@ -232,6 +318,10 @@ export async function updatePost(postId: string, formData: FormData) {
 
   const nextPublishVersion =
     intent === "schedule" ? post.publishVersion + 1 : post.publishVersion;
+  const publishTargets =
+    intent === "schedule"
+      ? selectedAccounts.map((account) => ({ id: crypto.randomUUID(), account }))
+      : [];
 
   await db.transaction(async (tx) => {
     await tx
@@ -261,35 +351,46 @@ export async function updatePost(postId: string, formData: FormData) {
       );
     }
 
-    await tx
-      .delete(schema.postPublish)
-      .where(eq(schema.postPublish.postId, postId));
-
-    if (intent === "schedule" && platforms.includes("linkedin")) {
-      await tx.insert(schema.postPublish).values({
-        id: crypto.randomUUID(),
-        postId,
-        platform: "linkedin",
-        publishVersion: nextPublishVersion,
-        status: "pending",
-      });
+    if (intent === "schedule") {
+      await tx.insert(schema.postPublish).values(
+        publishTargets.map(({ id, account }) => ({
+          id,
+          postId,
+          platform: account.platform,
+          connectedAccountId: account.id,
+          accountDisplayName: account.displayName,
+          accountUsername: account.username,
+          accountAvatarUrl: account.avatarUrl,
+          publishVersion: nextPublishVersion,
+          status: "pending",
+        })),
+      );
     }
   });
 
   if (intent === "schedule") {
     try {
-      await queuePostPublish({
+      await queuePostPublishTargets({
         postId,
         publishAt: validPublishAt as Date,
         publishVersion: nextPublishVersion,
+        targetIds: publishTargets.map((target) => target.id),
       });
-
-      await db
-        .update(schema.post)
-        .set({ queuedAt: new Date(), lastPublishError: null })
-        .where(and(eq(schema.post.id, postId), eq(schema.post.userId, session.user.id)));
     } catch (error) {
       console.error("Failed to queue scheduled post update", error);
+      await db
+        .update(schema.postPublish)
+        .set({
+          status: "failed",
+          error: "Could not queue scheduled publish job.",
+        })
+        .where(
+          and(
+            eq(schema.postPublish.postId, postId),
+            eq(schema.postPublish.publishVersion, nextPublishVersion),
+            eq(schema.postPublish.status, "pending"),
+          ),
+        );
       await db
         .update(schema.post)
         .set({

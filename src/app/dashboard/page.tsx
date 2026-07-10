@@ -2,13 +2,12 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  BriefcaseBusiness,
   CalendarClock,
-  Send,
   Upload,
 } from "lucide-react";
 
 import { createPost } from "@/app/dashboard/actions";
+import { AccountPicker } from "@/components/account-picker";
 import { DashboardNavbar } from "@/components/dashboard-navbar";
 import { MediaPickerDialog } from "@/components/media-picker-dialog";
 import { PostEditorDialog } from "@/components/post-editor-dialog";
@@ -69,17 +68,26 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const [allPosts, media] = await Promise.all([
+  const [allPosts, media, connectedAccounts] = await Promise.all([
     db.query.post.findMany({
       where: (post, { eq }) => eq(post.userId, session.user.id),
       orderBy: (post, { desc }) => [desc(post.createdAt)],
       with: {
         media: true,
+        publishes: true,
       },
     }),
     db.query.userMedia.findMany({
       where: (userMedia, { eq }) => eq(userMedia.userId, session.user.id),
       orderBy: (userMedia, { desc }) => [desc(userMedia.createdAt)],
+    }),
+    db.query.connectedAccount.findMany({
+      where: (connectedAccount, { and, eq }) =>
+        and(
+          eq(connectedAccount.userId, session.user.id),
+          eq(connectedAccount.status, "active"),
+        ),
+      orderBy: (connectedAccount, { asc }) => [asc(connectedAccount.createdAt)],
     }),
   ]);
   const posts = allPosts.slice(0, 5);
@@ -99,6 +107,13 @@ export default async function DashboardPage() {
     displayName: item.displayName,
     fileName: getMediaFileName(item.mediaUrl),
     contentType: item.contentType,
+  }));
+  const accountOptions = connectedAccounts.map((account) => ({
+    id: account.id,
+    platform: account.platform,
+    displayName: account.displayName,
+    username: account.username,
+    avatarUrl: account.avatarUrl,
   }));
 
   return (
@@ -146,37 +161,7 @@ export default async function DashboardPage() {
                 </div>
               </div>
 
-              <fieldset>
-                <legend className="text-sm font-medium text-zinc-800">
-                  Platforms
-                </legend>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-emerald-100 bg-zinc-50 px-3 py-3 text-sm font-medium text-zinc-800">
-                    <input
-                      type="checkbox"
-                      name="platforms"
-                      value="x"
-                      defaultChecked
-                      className="size-4 accent-emerald-600"
-                    />
-                    <Send className="size-4 text-emerald-700" aria-hidden="true" />
-                    X
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-emerald-100 bg-zinc-50 px-3 py-3 text-sm font-medium text-zinc-800">
-                    <input
-                      type="checkbox"
-                      name="platforms"
-                      value="linkedin"
-                      className="size-4 accent-emerald-600"
-                    />
-                    <BriefcaseBusiness
-                      className="size-4 text-emerald-700"
-                      aria-hidden="true"
-                    />
-                    LinkedIn
-                  </label>
-                </div>
-              </fieldset>
+              <AccountPicker accounts={accountOptions} />
 
               <fieldset>
                 <legend className="text-sm font-medium text-zinc-800">
@@ -274,10 +259,10 @@ export default async function DashboardPage() {
                 <h2 className="mt-2 text-xl font-semibold">Upcoming posts</h2>
               </div>
               <Link
-                href="/"
+                href="/dashboard/posts"
                 className="text-sm font-medium text-emerald-700 hover:text-emerald-800"
               >
-                Home
+                View all posts
               </Link>
             </div>
             {posts.length > 0 ? (
@@ -309,13 +294,17 @@ export default async function DashboardPage() {
                         post={{
                           id: post.id,
                           content: post.content,
-                          platforms: post.platforms.split(","),
-                          status: post.status,
+                          accountIds: post.publishes
+                            .filter((item) => item.publishVersion === post.publishVersion)
+                            .flatMap((item) =>
+                              item.connectedAccountId ? [item.connectedAccountId] : [],
+                            ),
                           publishDate: formatDateInput(post.publishAt),
                           publishTime: formatTimeInput(post.publishAt),
                           mediaIds: post.media.map((item) => item.mediaId),
                         }}
                         media={mediaOptions}
+                        accounts={accountOptions}
                       />
                     ) : null}
                   </div>

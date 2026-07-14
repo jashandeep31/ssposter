@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
-import { CalendarClock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CalendarClock, ChevronLeft, ChevronRight } from "lucide-react";
 
 type ScheduleValue = {
   date: string;
   time: string;
 };
 
-type Preset = {
-  label: string;
-  description: string;
-  value: Date;
-};
+type Step = "date" | "hour" | "minute" | "summary";
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
+const MINUTES = Array.from({ length: 60 }, (_, minute) => minute);
 
 function pad(value: number) {
   return String(value).padStart(2, "0");
@@ -22,46 +22,62 @@ function formatDateInput(value: Date) {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
 }
 
-function formatTimeInput(value: Date) {
-  return `${pad(value.getHours())}:${pad(value.getMinutes())}`;
-}
-
 function startOfDay(value: Date) {
   const next = new Date(value);
   next.setHours(0, 0, 0, 0);
   return next;
 }
 
-function addDays(value: Date, days: number) {
-  const next = new Date(value);
-  next.setDate(next.getDate() + days);
-  return next;
+function startOfMonth(value: Date) {
+  return new Date(value.getFullYear(), value.getMonth(), 1);
 }
 
-function atTime(value: Date, hour: number, minute = 0) {
-  const next = new Date(value);
-  next.setHours(hour, minute, 0, 0);
-  return next;
+function addMonths(value: Date, months: number) {
+  return new Date(value.getFullYear(), value.getMonth() + months, 1);
 }
 
-function getNextWeekday(value: Date) {
-  let next = addDays(startOfDay(value), 1);
+function isSameDay(first: Date, second: Date) {
+  return formatDateInput(first) === formatDateInput(second);
+}
 
-  while (next.getDay() === 0 || next.getDay() === 6) {
-    next = addDays(next, 1);
+function isBeforeDay(first: Date, second: Date) {
+  return startOfDay(first).getTime() < startOfDay(second).getTime();
+}
+
+function isBeforeMonth(first: Date, second: Date) {
+  return (
+    first.getFullYear() < second.getFullYear() ||
+    (first.getFullYear() === second.getFullYear() &&
+      first.getMonth() < second.getMonth())
+  );
+}
+
+function getCalendarDays(month: Date) {
+  const firstDay = startOfMonth(month);
+  const firstVisibleDay = new Date(
+    firstDay.getFullYear(),
+    firstDay.getMonth(),
+    1 - firstDay.getDay(),
+  );
+
+  return Array.from(
+    { length: 42 },
+    (_, index) =>
+      new Date(
+        firstVisibleDay.getFullYear(),
+        firstVisibleDay.getMonth(),
+        firstVisibleDay.getDate() + index,
+      ),
+  );
+}
+
+function getDateInputValue(value: string) {
+  if (!value) {
+    return null;
   }
 
-  return next;
-}
-
-function getNextWeekend(value: Date) {
-  let next = addDays(startOfDay(value), 1);
-
-  while (next.getDay() !== 6 && next.getDay() !== 0) {
-    next = addDays(next, 1);
-  }
-
-  return next;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function getScheduledDate({ date, time }: ScheduleValue) {
@@ -78,43 +94,25 @@ function getScheduledDate({ date, time }: ScheduleValue) {
   return value;
 }
 
-function getPresets(now: Date): Preset[] {
-  const tomorrow = addDays(startOfDay(now), 1);
-  const nextWeekday = getNextWeekday(now);
-  const nextWeekend = getNextWeekend(now);
+function getScheduleError(value: ScheduleValue) {
+  if (!value.date && !value.time) {
+    return "Choose a date and time before scheduling.";
+  }
 
-  return [
-    {
-      label: "Tomorrow 9 AM",
-      description: "Morning slot",
-      value: atTime(tomorrow, 9),
-    },
-    {
-      label: "Tomorrow noon",
-      description: "Lunch break",
-      value: atTime(tomorrow, 12),
-    },
-    {
-      label: "Tomorrow 6 PM",
-      description: "After work",
-      value: atTime(tomorrow, 18),
-    },
-    {
-      label: "Tomorrow 10 PM",
-      description: "Late evening",
-      value: atTime(tomorrow, 22),
-    },
-    {
-      label: "Next weekday 9 AM",
-      description: "Business hours",
-      value: atTime(nextWeekday, 9),
-    },
-    {
-      label: "Weekend 10 AM",
-      description: "Easy weekend post",
-      value: atTime(nextWeekend, 10),
-    },
-  ];
+  if (!value.date || !value.time) {
+    return "Choose both a publish date and time.";
+  }
+
+  return getScheduledDate(value)
+    ? null
+    : "Choose a valid publish date and time.";
+}
+
+function formatMonth(value: Date) {
+  return new Intl.DateTimeFormat("en", {
+    month: "long",
+    year: "numeric",
+  }).format(value);
 }
 
 function formatPreview(value: Date) {
@@ -127,24 +125,6 @@ function formatPreview(value: Date) {
   }).format(value);
 }
 
-function getScheduleError(value: ScheduleValue) {
-  if (!value.date && !value.time) {
-    return "Choose a date and time before scheduling.";
-  }
-
-  if (!value.date || !value.time) {
-    return "Choose both a publish date and time.";
-  }
-
-  const scheduledDate = getScheduledDate(value);
-
-  if (!scheduledDate) {
-    return "Choose a valid publish date and time.";
-  }
-
-  return null;
-}
-
 type SchedulePickerProps = {
   initialDate?: string;
   initialTime?: string;
@@ -155,21 +135,33 @@ export function SchedulePicker({
   initialTime = "",
 }: SchedulePickerProps) {
   const containerRef = useRef<HTMLElement>(null);
-  const dateInputId = useId();
-  const timeInputId = useId();
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState<Date | null>(null);
   const [value, setValue] = useState<ScheduleValue>({
     date: initialDate,
     time: initialTime,
   });
+  const [step, setStep] = useState<Step>(
+    initialDate && initialTime ? "summary" : "date",
+  );
+  const [month, setMonth] = useState<Date | null>(() => {
+    const initialSelectedDate = getDateInputValue(initialDate);
+    return initialSelectedDate ? startOfMonth(initialSelectedDate) : null;
+  });
   const [error, setError] = useState<string | null>(null);
-  const minDate = formatDateInput(now);
-  const presets = getPresets(now);
+
   const scheduledDate = getScheduledDate(value);
-  const scheduleError = getScheduleError(value);
+  const selectedDate = getDateInputValue(value.date);
+  const calendarDays = month ? getCalendarDays(month) : [];
 
   useEffect(() => {
-    const interval = window.setInterval(() => setNow(new Date()), 60 * 1000);
+    const updateNow = () => {
+      const currentTime = new Date();
+      setNow(currentTime);
+      setMonth((currentMonth) => currentMonth ?? startOfMonth(currentTime));
+    };
+    updateNow();
+
+    const interval = window.setInterval(updateNow, 60 * 1000);
 
     return () => window.clearInterval(interval);
   }, []);
@@ -201,17 +193,39 @@ export function SchedulePicker({
     return () => document.removeEventListener("submit", validateSchedule, true);
   }, [value]);
 
-  function applyValue(nextValue: ScheduleValue) {
-    setValue(nextValue);
-    setError(getScheduleError(nextValue));
+  function selectDate(date: Date) {
+    setValue({ date: formatDateInput(date), time: "" });
+    setError(null);
+    setStep("hour");
   }
 
-  function applyPreset(preset: Preset) {
-    applyValue({
-      date: formatDateInput(preset.value),
-      time: formatTimeInput(preset.value),
-    });
+  function selectHour(hour: number) {
+    setValue((currentValue) => ({
+      ...currentValue,
+      time: `${pad(hour)}:00`,
+    }));
+    setError(null);
+    setStep("minute");
   }
+
+  function selectMinute(minute: number) {
+    setValue((currentValue) => ({
+      ...currentValue,
+      time: `${currentValue.time.slice(0, 2)}:${pad(minute)}`,
+    }));
+    setError(null);
+    setStep("summary");
+  }
+
+  function clearSchedule() {
+    setValue({ date: "", time: "" });
+    setError(null);
+    setStep("date");
+    setMonth(now ? startOfMonth(now) : null);
+  }
+
+  const selectedHour = value.time ? Number(value.time.slice(0, 2)) : null;
+  const selectedMinute = value.time ? Number(value.time.slice(3, 5)) : null;
 
   return (
     <section
@@ -228,97 +242,229 @@ export function SchedulePicker({
             Schedule time
           </h3>
           <p className="mt-1 text-sm text-zinc-600">
-            Pick a common time or choose your own.
+            Choose a date, then an hour and minute.
           </p>
         </div>
         <button
           type="button"
-          onClick={() => applyValue({ date: "", time: "" })}
+          onClick={clearSchedule}
           className="w-fit text-sm font-medium text-emerald-700 hover:text-emerald-800"
         >
           Clear
         </button>
       </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {presets.map((preset) => {
-          const isSelected =
-            value.date === formatDateInput(preset.value) &&
-            value.time === formatTimeInput(preset.value);
+      {now && month ? (
+        <>
+          <div className="mt-5 grid grid-cols-3 gap-2" aria-label="Schedule steps">
+            {([
+              ["date", "1. Date"],
+              ["hour", "2. Hour"],
+              ["minute", "3. Minute"],
+            ] as const).map(([stepName, label]) => {
+              const isCurrent =
+                step === stepName || (step === "summary" && stepName === "minute");
+              const isAvailable =
+                stepName === "date" ||
+                (stepName === "hour" && Boolean(value.date)) ||
+                (stepName === "minute" && Boolean(value.date && value.time));
 
-          return (
-            <button
-              key={`${preset.label}-${preset.value.toISOString()}`}
-              type="button"
-              onClick={() => applyPreset(preset)}
-              className={`rounded-lg border px-3 py-3 text-left text-sm transition-colors ${
-                isSelected
-                  ? "border-emerald-500 bg-white text-emerald-950 shadow-sm"
-                  : "border-emerald-100 bg-white/70 text-zinc-800 hover:border-emerald-300 hover:bg-white"
-              }`}
-            >
-              <span className="block font-semibold">{preset.label}</span>
-              <span className="mt-1 block text-xs text-zinc-500">
-                {preset.description}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+              return (
+                <button
+                  key={stepName}
+                  type="button"
+                  onClick={() => setStep(stepName)}
+                  disabled={!isAvailable}
+                  className={`h-9 rounded-md border text-xs font-semibold transition-colors ${
+                    isCurrent
+                      ? "border-emerald-600 bg-emerald-600 text-white"
+                      : "border-emerald-100 bg-white text-zinc-600 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <div>
-          <label
-            htmlFor={dateInputId}
-            className="text-sm font-medium text-zinc-800"
-          >
-            Custom date
-          </label>
-          <input
-            id={dateInputId}
-            type="date"
-            min={minDate}
-            value={value.date}
-            onChange={(event) =>
-              applyValue({ ...value, date: event.currentTarget.value })
-            }
-            className="mt-2 h-11 w-full rounded-lg border border-emerald-100 bg-white px-3 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-3 focus:ring-emerald-600/20"
-          />
-        </div>
-        <div>
-          <label
-            htmlFor={timeInputId}
-            className="text-sm font-medium text-zinc-800"
-          >
-            Custom time
-          </label>
-          <input
-            id={timeInputId}
-            type="time"
-            step={900}
-            value={value.time}
-            onChange={(event) =>
-              applyValue({ ...value, time: event.currentTarget.value })
-            }
-            className="mt-2 h-11 w-full rounded-lg border border-emerald-100 bg-white px-3 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-3 focus:ring-emerald-600/20"
-          />
-        </div>
-      </div>
+          <div className="mt-3 rounded-lg border border-emerald-100 bg-white p-3 sm:p-4">
+            {step === "date" ? (
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    aria-label="Previous month"
+                    onClick={() => setMonth((currentMonth) => currentMonth && addMonths(currentMonth, -1))}
+                    disabled={isBeforeMonth(addMonths(month, -1), startOfMonth(now))}
+                    className="inline-flex size-9 items-center justify-center rounded-md text-zinc-600 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft className="size-4" aria-hidden="true" />
+                  </button>
+                  <h4 className="text-sm font-semibold text-zinc-900">
+                    {formatMonth(month)}
+                  </h4>
+                  <button
+                    type="button"
+                    aria-label="Next month"
+                    onClick={() => setMonth((currentMonth) => currentMonth && addMonths(currentMonth, 1))}
+                    className="inline-flex size-9 items-center justify-center rounded-md text-zinc-600 hover:bg-emerald-50"
+                  >
+                    <ChevronRight className="size-4" aria-hidden="true" />
+                  </button>
+                </div>
+                <div className="mt-4 grid grid-cols-7 text-center text-xs font-medium text-zinc-500">
+                  {WEEKDAYS.map((weekday) => (
+                    <span key={weekday} className="py-1">
+                      {weekday}
+                    </span>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-y-1">
+                  {calendarDays.map((date) => {
+                    const isCurrentMonth = date.getMonth() === month.getMonth();
+                    const isPast = isBeforeDay(date, now);
+                    const isSelected = selectedDate && isSameDay(date, selectedDate);
 
-      <div className="mt-4 rounded-lg bg-white px-3 py-2 text-sm">
-        {scheduledDate && !scheduleError ? (
-          <p className="font-medium text-emerald-800">
-            Scheduled for {formatPreview(scheduledDate)}
-          </p>
-        ) : (
-          <p className="text-zinc-600">
-            Save as draft anytime, or choose a valid date and time to schedule.
-          </p>
-        )}
-        {error ? (
-          <p className="mt-1 text-sm font-medium text-red-700">{error}</p>
-        ) : null}
-      </div>
+                    return (
+                      <button
+                        key={formatDateInput(date)}
+                        type="button"
+                        aria-label={date.toLocaleDateString("en", {
+                          weekday: "long",
+                          month: "long",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                        aria-pressed={Boolean(isSelected)}
+                        disabled={!isCurrentMonth || isPast}
+                        onClick={() => selectDate(date)}
+                        className={`mx-auto inline-flex size-9 items-center justify-center rounded-full text-sm transition-colors ${
+                          isSelected
+                            ? "bg-emerald-600 font-semibold text-white"
+                            : isCurrentMonth
+                              ? "text-zinc-800 hover:bg-emerald-50"
+                              : "text-zinc-300"
+                        } disabled:cursor-not-allowed disabled:opacity-40`}
+                      >
+                        {date.getDate()}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {step === "hour" ? (
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-zinc-900">Choose an hour</h4>
+                    <p className="mt-1 text-sm text-zinc-600">24-hour time</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep("date")}
+                    className="text-sm font-medium text-emerald-700 hover:text-emerald-800"
+                  >
+                    Change date
+                  </button>
+                </div>
+                <div className="mt-4 grid grid-cols-4 gap-2 sm:grid-cols-6">
+                  {HOURS.map((hour) => (
+                    <button
+                      key={hour}
+                      type="button"
+                      aria-pressed={selectedHour === hour}
+                      onClick={() => selectHour(hour)}
+                      className={`h-10 rounded-md border text-sm font-semibold transition-colors ${
+                        selectedHour === hour
+                          ? "border-emerald-600 bg-emerald-600 text-white"
+                          : "border-emerald-100 text-zinc-800 hover:border-emerald-300 hover:bg-emerald-50"
+                      }`}
+                    >
+                      {pad(hour)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {step === "minute" ? (
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-zinc-900">Choose a minute</h4>
+                    <p className="mt-1 text-sm text-zinc-600">
+                      {selectedHour === null ? "Choose an hour first." : `${pad(selectedHour)}:--`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep("hour")}
+                    className="text-sm font-medium text-emerald-700 hover:text-emerald-800"
+                  >
+                    Change hour
+                  </button>
+                </div>
+                <div className="mt-4 grid grid-cols-5 gap-2 sm:grid-cols-10">
+                  {MINUTES.map((minute) => (
+                    <button
+                      key={minute}
+                      type="button"
+                      aria-pressed={selectedMinute === minute}
+                      onClick={() => selectMinute(minute)}
+                      className={`h-9 rounded-md border text-xs font-semibold transition-colors ${
+                        selectedMinute === minute
+                          ? "border-emerald-600 bg-emerald-600 text-white"
+                          : "border-emerald-100 text-zinc-800 hover:border-emerald-300 hover:bg-emerald-50"
+                      }`}
+                    >
+                      {pad(minute)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {step === "summary" && scheduledDate ? (
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h4 className="text-sm font-semibold text-zinc-900">
+                    Ready to schedule
+                  </h4>
+                  <p className="mt-1 text-base font-semibold text-emerald-800">
+                    {formatPreview(scheduledDate)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStep("date")}
+                  className="inline-flex h-10 items-center justify-center rounded-md border border-emerald-200 px-4 text-sm font-medium text-emerald-800 transition-colors hover:bg-emerald-50"
+                >
+                  Change
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-3 rounded-lg bg-white px-3 py-2 text-sm">
+            {!scheduledDate ? (
+              <p className="text-zinc-600">
+                Save as draft anytime, or complete all three steps to schedule.
+              </p>
+            ) : null}
+            {error ? (
+              <p className="mt-1 text-sm font-medium text-red-700">{error}</p>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <div
+          className="mt-5 h-80 animate-pulse rounded-lg border border-emerald-100 bg-white"
+          aria-busy="true"
+          aria-label="Loading scheduler"
+        />
+      )}
     </section>
   );
 }

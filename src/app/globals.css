@@ -1,3 +1,4 @@
+@config "../../tailwind.config.js";
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -126,5 +127,36 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  .dark .bg-white {
+    background-color: var(--card);
+  }
+
+  .dark .bg-zinc-50 {
+    background-color: var(--muted);
+  }
+
+  .dark .text-zinc-950,
+  .dark .text-zinc-900,
+  .dark .text-zinc-800 {
+    color: var(--foreground);
+  }
+
+  .dark .text-zinc-700,
+  .dark .text-zinc-600,
+  .dark .text-zinc-500 {
+    color: var(--muted-foreground);
+  }
+
+  .dark [class*="border-emerald-100"],
+  .dark [class*="border-emerald-200"] {
+    border-color: var(--border);
+  }
+
+  .dark [class*="bg-emerald-50"] {
+    background-color: var(--accent);
   }
 }

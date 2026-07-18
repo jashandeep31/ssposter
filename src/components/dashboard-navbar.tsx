@@ -5,6 +5,7 @@ import { Menu, X } from "lucide-react";
 import { useState } from "react";
 
 import { SignOutButton } from "@/components/sign-out-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
@@ -54,7 +55,7 @@ export function DashboardNavbar() {
               <Link
                 key={item.label}
                 href={item.href}
-                className="inline-flex h-9 items-center rounded-lg px-3 text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950"
+                className="inline-flex h-9 items-center rounded-lg px-3 text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-muted dark:hover:text-foreground"
               >
                 {item.label}
               </Link>
@@ -62,7 +63,8 @@ export function DashboardNavbar() {
           </nav>
         </div>
 
-        <div className="hidden sm:block">
+        <div className="hidden items-center gap-2 sm:flex">
+          <ThemeToggle />
           <SignOutButton />
         </div>
 
@@ -83,7 +85,10 @@ export function DashboardNavbar() {
                 </Link>
               ))}
             </nav>
-            <SignOutButton />
+            <div className="flex items-center justify-between gap-2">
+              <ThemeToggle />
+              <SignOutButton />
+            </div>
           </div>
         ) : null}
       </div>

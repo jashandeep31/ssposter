@@ -3,6 +3,8 @@
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 
+import { ThemeToggle } from "@/components/theme-toggle";
+
 const navItems = [
   { label: "Features", href: "#features" },
   { label: "Workflow", href: "#workflow" },
@@ -18,7 +20,7 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-emerald-100/80 bg-white/90 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-emerald-100/80 bg-white/90 backdrop-blur dark:bg-background/90">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-3 px-3 sm:h-16 sm:px-6 lg:px-8">
         <a
           href="#"
@@ -44,6 +46,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
+          <ThemeToggle />
           <a
             href="/login"
             className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/30"
@@ -52,20 +55,23 @@ export function SiteHeader() {
           </a>
         </div>
 
-        <button
-          type="button"
-          className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-white text-emerald-900 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/20 md:hidden"
-          aria-expanded={isOpen}
-          aria-controls="mobile-navigation"
-          aria-label={isOpen ? "Close navigation menu" : "Open navigation menu"}
-          onClick={() => setIsOpen((current) => !current)}
-        >
-          {isOpen ? (
-            <X className="size-5" aria-hidden="true" />
-          ) : (
-            <Menu className="size-5" aria-hidden="true" />
-          )}
-        </button>
+        <div className="flex items-center gap-2 md:hidden">
+          <ThemeToggle />
+          <button
+            type="button"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-white text-emerald-900 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-600/20"
+            aria-expanded={isOpen}
+            aria-controls="mobile-navigation"
+            aria-label={isOpen ? "Close navigation menu" : "Open navigation menu"}
+            onClick={() => setIsOpen((current) => !current)}
+          >
+            {isOpen ? (
+              <X className="size-5" aria-hidden="true" />
+            ) : (
+              <Menu className="size-5" aria-hidden="true" />
+            )}
+          </button>
+        </div>
       </div>
 
       <div

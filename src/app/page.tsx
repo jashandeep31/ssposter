@@ -115,7 +115,7 @@ export default async function Home() {
     <main className="min-h-screen bg-white text-zinc-950">
       <SiteHeader />
 
-      <section className="border-b border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f0fdf4_100%)]">
+      <section className="border-b border-emerald-100 bg-[linear-gradient(180deg,#ffffff_0%,#f0fdf4_100%)] dark:bg-[linear-gradient(180deg,#18181b_0%,#052e16_100%)]">
         <div className="mx-auto grid w-full max-w-6xl gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:px-8 lg:py-24">
           <div className="max-w-2xl">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-sm font-medium text-emerald-800">
